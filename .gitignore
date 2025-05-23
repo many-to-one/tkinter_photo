@@ -1,0 +1,25 @@
+# Ignore Python bytecode
+*.pyc
+__pycache__/
+
+# Ignore virtual environments
+venv/
+.env/
+
+# Ignore image cache files
+*.png
+*.jpg
+*.jpeg
+*.tiff
+*.cr2
+
+# Ignore OpenCV temporary files
+*.dat
+*.log
+
+# Ignore Tkinter temp settings
+settings.json
+
+# Ignore Pillow and rawpy temp files
+*.xmp
+*.dng
