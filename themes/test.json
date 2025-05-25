@@ -1,0 +1,9 @@
+{
+    "CTk": {
+        "fg_color": ["#333333", "#222222"]
+    },
+    "CTkButton": {
+        "corner_radius": 6,
+        "fg_color": ["#3B8ED0", "#1F6AA5"]
+    }
+}
