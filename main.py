@@ -18,6 +18,7 @@ from adjustments.shadows_lights import adjust_shadows_lights
 from adjustments.white_balance import *
 from adjustments.dehaze import dehaze_effect
 from adjustments.fog import fog_effect
+from adjustments.hsl import apply_hsl_adjustments
 
 # Theme
 ctk.set_appearance_mode("Dark")
@@ -99,6 +100,21 @@ class ImageEditorApp(ctk.CTk):
         self.fog_slider = self.create_slider(tone_section, -2.0, 2.0, 0.0, self.update_image, "Fog")
 
 
+        # HSL
+        self.hsl_section = self.create_accordion_section(controls, "HSL")
+
+        self.hue_sliders = {}
+        self.sat_sliders = {}
+        self.lum_sliders = {}
+
+        colors = ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]
+        for color in colors:
+            self.hue_sliders[color] = self.create_slider(self.hsl_section, -180, 180, 0, self.update_image, f"{color} Hue")
+            self.sat_sliders[color] = self.create_slider(self.hsl_section, -1.0, 1.0, 0, self.update_image, f"{color} Saturation")
+            self.lum_sliders[color] = self.create_slider(self.hsl_section, -1.0, 1.0, 0, self.update_image, f"{color} Luminance")
+
+
+
 
         reset_btn = ctk.CTkButton(controls, text="Reset", command=self.reset_sliders)
         reset_btn.pack(pady=10)
@@ -137,106 +153,27 @@ class ImageEditorApp(ctk.CTk):
 
 
 
-    # def open_image(self):
-    #     path = filedialog.askopenfilename(filetypes=[("Image Files", "*.jpg *.png *.jpeg *.tiff *.cr2")])
-        
-    #     if path.lower().endswith(".cr2"):  # RAW format handling
-    #         raw = rawpy.imread(path)
-    #         rgb = raw.postprocess()
-    #         self.original_image = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-        
-    #     elif path.lower().endswith(".tiff"):  # TIFF format handling
-    #         pil_img = Image.open(path)
-    #         self.original_image = np.array(pil_img)  # Convert Pillow image to NumPy
-        
-    #     else:  # Standard formats
-    #         self.original_image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-
-    #     if self.original_image is None:
-    #         print("Error loading image!")
-    #         return
-
-    #     self.display_image = self.original_image.copy()
-    #     self.show_image(self.display_image)
-
     def open_image(self):
         path = filedialog.askopenfilename(filetypes=[("Image Files", "*.jpg *.png *.jpeg *.tiff *.cr2")])
-        if not path:
-            return
-
-        # Load image
-        if path.lower().endswith(".cr2"):
+        
+        if path.lower().endswith(".cr2"):  # RAW format handling
             raw = rawpy.imread(path)
             rgb = raw.postprocess()
             self.original_image = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-
-        elif path.lower().endswith(".tiff"):
+        
+        elif path.lower().endswith(".tiff"):  # TIFF format handling
             pil_img = Image.open(path)
-            self.original_image = np.array(pil_img)
-
-        else:
+            self.original_image = np.array(pil_img)  # Convert Pillow image to NumPy
+        
+        else:  # Standard formats
             self.original_image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
 
         if self.original_image is None:
             print("Error loading image!")
             return
 
-        # --- Preview Scale ---
-        self.preview_scale = self.calculate_preview_scale(self.original_image)
-        self.preview_image = cv2.resize(self.original_image, (0, 0),
-                                        fx=self.preview_scale, fy=self.preview_scale)
-
-        self.display_image = self.preview_image.copy()
-        print(' ----------- display_image dimensions --------------', self.display_image.shape)
+        self.display_image = self.original_image.copy()
         self.show_image(self.display_image)
-
-
-    # def apply_adjustments(self, high_res=False):
-    #     # Choose base image
-    #     img = self.original_image if high_res else self.display_image.copy()
-
-    #     # Your existing sliders
-    #     brightness = self.brightness_slider.get()
-    #     contrast = self.contrast_slider.get()
-    #     shadow_factor = self.shadow_slider.get()
-    #     light_factor = self.light_slider.get()
-    #     saturation = self.color_slider.get()
-    #     temperature = self.temperature_slider.get()
-    #     tint = self.tint_slider.get()
-    #     dehaze_strength = self.dehaze_slider.get()
-    #     fog_strength = self.fog_slider.get()
-
-    #     # Apply all effects
-    #     img = apply_brightness(img, brightness)
-    #     img = apply_contrast(img, contrast)
-    #     img = adjust_saturation_rgb(img, saturation)
-    #     img = adjust_shadows_lights(img, shadow_factor, light_factor)
-    #     img = apply_white_balance(img, temp, tint)
-    #     img = apply_dehaze(img, dehaze_strength)
-    #     img = apply_fog(img, fog_strength)
-
-    #     # Kelvin-based temperature adjustment
-    #     img = apply_kelvin_temperature(img, temperature)
-    #     img = apply_tint_shift(img, tint)
-
-    #     # Curve (if any)
-    #     lut = self.generate_lut()
-    #     b, g, r = cv2.split(img)
-    #     r = cv2.LUT(r, lut)
-    #     g = cv2.LUT(g, lut)
-    #     b = cv2.LUT(b, lut)
-    #     img = cv2.merge((b, g, r))
-
-    #     # print(' ----------- adjustment dimensions --------------', img.shape)
-
-    #     # Display (scaled preview)
-    #     if not high_res:
-    #         self.display_image = img
-    #         self.show_image(self.display_image)
-    #     else:
-    #         return img
-
-
 
 
     def calculate_preview_scale(self, image):
@@ -260,8 +197,8 @@ class ImageEditorApp(ctk.CTk):
 
 
     def apply_adjustments(self, high_res=False):
-        # img = self.original_image.copy()
-        img = self.original_image if high_res else self.display_image.copy()
+        img = self.original_image.copy()
+        # img = self.original_image if high_res else self.display_image.copy()
 
         brightness = self.brightness_slider.get()
         contrast = self.contrast_slider.get()
@@ -270,6 +207,14 @@ class ImageEditorApp(ctk.CTk):
         saturation = self.color_slider.get()
         dehaze = self.dehaze_slider.get()
         fog = self.fog_slider.get()
+
+        # HSL
+        hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
+        sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
+        lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
+
+        img = apply_hsl_adjustments(img, hue_adj, sat_adj, lum_adj)
+
 
         # White balance
         temperature = int(self.temperature_slider.get())
@@ -287,8 +232,8 @@ class ImageEditorApp(ctk.CTk):
         img = apply_contrast(img, contrast)
         img = adjust_saturation_rgb(img, saturation)
         img = adjust_shadows_lights(img, shadow_factor, light_factor)
-        img = dehaze_effect(img, dehaze)
-        img = fog_effect(img, fog)
+        img = self.dehaze_effect(img, dehaze)
+        img = self.fog_effect(img, fog)
 
         # Curve
         lut = self.generate_lut()
@@ -299,10 +244,55 @@ class ImageEditorApp(ctk.CTk):
         b = cv2.LUT(b, lut)
         img = cv2.merge((b, g, r))
 
-        print(' ----------- adjustment dimensions --------------', img.shape)
+        # print(' ----------- adjustment dimensions --------------', img.shape)
 
         self.display_image = img
         self.show_image(self.display_image)
+
+
+
+##############################################################################################################################################
+############################################################ === DEHAZE === ##################################################################
+##############################################################################################################################################
+
+    def dehaze_effect(self, img, strength):
+        if strength == 0:
+            return img
+
+        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        # print(' ------ dehaze_image ------', strength)
+
+        clahe = cv2.createCLAHE(clipLimit=2.0 + 4.0 * strength, tileGridSize=(8, 8))
+        cl = clahe.apply(l)
+
+        merged = cv2.merge((cl, a, b))
+        return cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
+
+##############################################################################################################################################
+############################################################### === FOG === ##################################################################
+##############################################################################################################################################
+
+    def fog_effect(self, img, strength):
+
+        """
+        Adds a fog effect by blending the image with a white layer.
+        fog_intensity: float between 0 (no fog) and 2.0 (max fog)
+        """
+        fog_intensity = np.clip(strength, 0.0, 2.0)
+
+        # Create a white image
+        fog_color = np.full_like(img, 255)
+
+        # Blend original with white
+        blend_strength = min(strength / 2.0, 1.0)
+        fogged = cv2.addWeighted(img, 1 - blend_strength, fog_color, blend_strength, 0)
+
+        # Optional: reduce contrast slightly
+        if strength > 0.1:
+            fogged = apply_contrast(fogged, 1.0 - (strength * 0.15))  # adjust as needed
+
+        return fogged
 
 
     def show_image(self, img):

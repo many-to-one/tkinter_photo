@@ -72,6 +72,21 @@ def apply_kelvin_temperature(image, kelvin):
     ])
     return result
 
+# from numba import njit, prange
+
+
+# @njit
+# def apply_kelvin_temperature(img, kelvin_shift):
+#     b_shift = max(-100, min(100, -kelvin_shift // 2))
+#     r_shift = max(-100, min(100, kelvin_shift // 2))
+
+#     img = img.astype(np.int16)
+#     img[:, :, 0] = np.clip(img[:, :, 0] + b_shift, 0, 255)
+#     img[:, :, 2] = np.clip(img[:, :, 2] + r_shift, 0, 255)
+
+#     return img.astype(np.uint8)
+
+
 
 def apply_tint_shift(image, tint_shift):
     """
