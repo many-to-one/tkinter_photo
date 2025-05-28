@@ -18,7 +18,7 @@ from adjustments.shadows_lights import adjust_shadows_lights
 from adjustments.white_balance import *
 from adjustments.dehaze import dehaze_effect
 from adjustments.fog import fog_effect
-from adjustments.hsl import apply_hsl_adjustments
+from adjustments.hsl import *
 
 # Theme
 ctk.set_appearance_mode("Dark")
@@ -209,11 +209,36 @@ class ImageEditorApp(ctk.CTk):
         fog = self.fog_slider.get()
 
         # HSL
-        hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
-        sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
-        lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
+        # hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
+        # sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
+        # lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
 
-        img = apply_hsl_adjustments(img, hue_adj, sat_adj, lum_adj)
+        # img = apply_hsl_superfast(img, hue_adj, sat_adj, lum_adj)
+
+        # # 1. Read HSL slider values as dictionaries
+        # hue_adj_dict = {color: self.hue_sliders[color].get() for color in self.hue_sliders}
+        # sat_adj_dict = {color: self.sat_sliders[color].get() for color in self.sat_sliders}
+        # lum_adj_dict = {color: self.lum_sliders[color].get() for color in self.lum_sliders}
+
+        # # Create hue LUT once and reuse
+        # # Order of bands must match the LUT creation!
+        # band_order = ['Red', 'Orange', 'Yellow', 'Green', 'Aqua', 'Blue', 'Purple', 'Magenta']
+
+        # # 3. Convert to arrays
+        # hue_adj = np.array([hue_adj_dict.get(c, 0) for c in band_order], dtype=np.float32)
+        # sat_adj = np.array([sat_adj_dict.get(c, 0) for c in band_order], dtype=np.float32)
+        # lum_adj = np.array([lum_adj_dict.get(c, 0) for c in band_order], dtype=np.float32)
+
+        # # Convert to HLS
+        # hls = cv2.cvtColor(img, cv2.COLOR_BGR2HLS).astype(np.float32)
+
+        # # Apply fast HSL logic
+        # hue_lut = create_hue_band_lut()
+        # adjusted_hls = apply_hsl_core_lut(hls, hue_lut, hue_adj, sat_adj, lum_adj)
+
+        # # Back to BGR
+        # img = cv2.cvtColor(adjusted_hls.astype(np.uint8), cv2.COLOR_HLS2BGR)
+
 
 
         # White balance
@@ -243,6 +268,12 @@ class ImageEditorApp(ctk.CTk):
         g = cv2.LUT(g, lut)
         b = cv2.LUT(b, lut)
         img = cv2.merge((b, g, r))
+
+        hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
+        sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
+        lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
+
+        img = apply_hsl_superfast(img, hue_adj, sat_adj, lum_adj)
 
         # print(' ----------- adjustment dimensions --------------', img.shape)
 

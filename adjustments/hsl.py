@@ -1,88 +1,95 @@
-import cv2, numpy as np 
-
-def apply_hsl_adjustments(img, hue_adj, sat_adj, lum_adj):
-    img_hls = cv2.cvtColor(img, cv2.COLOR_BGR2HLS).astype(np.float32)
-    h, l, s = cv2.split(img_hls)
-
-    # Normalize to 0-1
-    h /= 180.0
-    l /= 255.0
-    s /= 255.0
-
-    # Hue band centers in normalized hue space
-    band_centers = {
-        "Red": 0.0,
-        "Orange": 0.06,
-        "Yellow": 0.13,
-        "Green": 0.25,
-        "Aqua": 0.5,
-        "Blue": 0.6,
-        "Purple": 0.75,
-        "Magenta": 0.9,
-    }
-
-    for color, center in band_centers.items():
-        # Create a mask for the band
-        dist = np.abs(h - center)
-        dist = np.minimum(dist, 1 - dist)  # wrap-around distance
-        mask = dist < 0.04  # soft band ~14.4 degrees
-        strength = 1.0 - (dist / 0.04)
-        strength = np.clip(strength, 0, 1)
-
-        # Apply Hue shift
-        h[mask] += hue_adj.get(color, 0) / 360.0 * strength[mask]
-        h %= 1.0
-
-        # Saturation and luminance
-        s[mask] += sat_adj.get(color, 0) * strength[mask]
-        l[mask] += lum_adj.get(color, 0) * strength[mask]
-
-    # Clip and convert back
-    h = np.clip(h * 180, 0, 180)
-    l = np.clip(l * 255, 0, 255)
-    s = np.clip(s * 255, 0, 255)
-
-    adjusted = cv2.merge((h, l, s)).astype(np.uint8)
-    return cv2.cvtColor(adjusted, cv2.COLOR_HLS2BGR)
+import numpy as np
+import cv2
+from numba import njit, prange
 
 
+band_centers = [0, 11, 23, 45, 90, 108, 135, 162]  # in degrees
+band_names = ['Red', 'Orange', 'Yellow', 'Green', 'Aqua', 'Blue', 'Purple', 'Magenta']
+
+def assign_hue_band_map():
+    hue_band = np.zeros(180, dtype=np.uint8)
+    for i, center in enumerate(band_centers):
+        for h in range(180):
+            d = abs(h - center)
+            wrap = min(d, 180 - d)
+            if wrap < 7:
+                hue_band[h] = i + 1  # 1-based band index (0 = no match)
+    return hue_band
+
+def generate_full_luts(hue_adj, sat_adj, lum_adj):
+    hue_lut = np.arange(180, dtype=np.uint8)
+    sat_luts = np.tile(np.arange(256), (8, 1))
+    lum_luts = np.tile(np.arange(256), (8, 1))
+
+    for i, name in enumerate(band_names):
+        h_shift = hue_adj.get(name, 0)
+        s_shift = sat_adj.get(name, 0)
+        l_shift = lum_adj.get(name, 0)
+
+        hue_lut = (hue_lut + np.where(assign_hue_band_map() == (i + 1), h_shift, 0)) % 180
+
+        sat_luts[i] = np.clip(np.arange(256) + s_shift, 0, 255)
+        lum_luts[i] = np.clip(np.arange(256) + l_shift, 0, 255)
+
+    return hue_lut.astype(np.uint8), sat_luts.astype(np.uint8), lum_luts.astype(np.uint8), assign_hue_band_map()
+
+
+def apply_hsl_superfast(img_bgr, hue_adj, sat_adj, lum_adj):
+    hue_lut, sat_luts, lum_luts, hue_band = generate_full_luts(hue_adj, sat_adj, lum_adj)
+
+    hls = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HLS)
+    h, l, s = cv2.split(hls)
+
+    band_indices = hue_band[h]
+
+    # Apply LUTs based on band
+    h_new = hue_lut[h]
+    s_new = s.copy()
+    l_new = l.copy()
+
+    for i in range(1, 9):  # band 1 to 8
+        mask = band_indices == i
+        s_new[mask] = sat_luts[i - 1][s[mask]]
+        l_new[mask] = lum_luts[i - 1][l[mask]]
+
+    result_hls = cv2.merge((h_new, l_new, s_new))
+    return cv2.cvtColor(result_hls, cv2.COLOR_HLS2BGR)
 
 
 
 
-# import numpy as np
-# import cv2
-# from numba import njit, prange
+
+
+
+
+# def create_hue_band_lut():
+#     band_centers = [0, 11, 23, 45, 90, 108, 135, 162]  # in degrees
+#     hue_lut = np.zeros(180, dtype=np.uint8)
+
+#     for i, center in enumerate(band_centers):
+#         for h in range(180):
+#             d = abs(h - center)
+#             wrap = min(d, 180 - d)
+#             if wrap < 7:  # 14° range
+#                 hue_lut[h] = i + 1  # 1-based band index (0 means no band)
+#     return hue_lut
+
 
 # @njit(parallel=True)
-# def apply_hsl_core(hls_img, hue_adj, sat_adj, lum_adj):
+# def apply_hsl_core_lut(hls_img, hue_lut, hue_adj, sat_adj, lum_adj):
 #     h, w, _ = hls_img.shape
 #     for y in prange(h):
 #         for x in range(w):
 #             h_val, l_val, s_val = hls_img[y, x]
+#             band = hue_lut[int(h_val)]
+#             if band == 0:
+#                 continue  # no band match
+#             idx = band - 1
 
-#             # Hue shift by color range (simplified to example color bands)
-#             if 0 <= h_val < 20:   # Red
-#                 h_val = (h_val + hue_adj[0]) % 180
-#                 s_val = np.clip(s_val * sat_adj[0], 0, 255)
-#                 l_val = np.clip(l_val * lum_adj[0], 0, 255)
-#             elif 20 <= h_val < 40:  # Orange
-#                 h_val = (h_val + hue_adj[1]) % 180
-#                 s_val = np.clip(s_val * sat_adj[1], 0, 255)
-#                 l_val = np.clip(l_val * lum_adj[1], 0, 255)
-#             # ...continue for Yellow, Green, Aqua, Blue, Purple, Magenta...
+#             h_val = (h_val + hue_adj[idx]) % 180
+#             s_val = min(max(s_val + sat_adj[idx], 0), 255)
+#             l_val = min(max(l_val + lum_adj[idx], 0), 255)
 
 #             hls_img[y, x] = [h_val, l_val, s_val]
 #     return hls_img
-
-# def apply_hsl_adjustments(img, hue_adj_dict, sat_adj_dict, lum_adj_dict):
-#     hls = cv2.cvtColor(img, cv2.COLOR_BGR2HLS).astype(np.float32)
-
-#     hue_adj = np.array([hue_adj_dict[color] for color in ['red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'magenta']], dtype=np.float32)
-#     sat_adj = np.array([sat_adj_dict[color] for color in ['red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'magenta']], dtype=np.float32)
-#     lum_adj = np.array([lum_adj_dict[color] for color in ['red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'magenta']], dtype=np.float32)
-
-#     hls = apply_hsl_core(hls, hue_adj, sat_adj, lum_adj)
-#     result = cv2.cvtColor(hls.astype(np.uint8), cv2.COLOR_HLS2BGR)
-#     return result
 
