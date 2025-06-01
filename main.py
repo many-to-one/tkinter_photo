@@ -7,6 +7,7 @@ from PIL import Image, ImageTk, ImageEnhance
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Pool, cpu_count
 
 import rawpy
 
@@ -19,6 +20,7 @@ from adjustments.white_balance import *
 from adjustments.dehaze import dehaze_effect
 from adjustments.fog import fog_effect
 from adjustments.hsl import *
+from adjustments.tiles import *
 
 # Theme
 ctk.set_appearance_mode("Dark")
@@ -27,6 +29,9 @@ ctk.set_appearance_mode("Dark")
 class ImageEditorApp(ctk.CTk):
     def __init__(self):
         super().__init__()
+
+        self.root = root = self
+        self.slider_update_job = None
 
         self.title("Image Editor")
         self.geometry("1000x600")
@@ -83,21 +88,21 @@ class ImageEditorApp(ctk.CTk):
 
         # White balance accordion section
         white_balance_section = self.create_accordion_section(controls, "White Balance")
-        self.temperature_slider = self.create_slider(white_balance_section, 1000, 10000, 6500, self.update_image, "Temperature (K)")
-        self.tint_slider = self.create_slider(white_balance_section, -150, 150, 0, self.update_image, "Tint")
+        self.temperature_slider = self.create_slider(white_balance_section, 1000, 10000, 6500, lambda value: self.update_image('temperature', value), "Temperature (K)")
+        self.tint_slider = self.create_slider(white_balance_section, -150, 150, 0, lambda value: self.update_image('tint', value), "Tint")
 
         # self.temp_slider = self.create_slider(white_balance_section, -100, 100, 0, self.update_image, "Temperature")
         # self.tint_slider = self.create_slider(white_balance_section, -100, 100, 0, self.update_image, "Tint")
 
         # Ton sliders inside tone_section
         tone_section = self.create_accordion_section(controls, "Tone")
-        self.brightness_slider = self.create_slider(tone_section, -100, 100, 0, self.update_image, "Brightness")
-        self.contrast_slider = self.create_slider(tone_section, 0.1, 2.0, 1.0, self.update_image, "Contrast")
-        self.shadow_slider = self.create_slider(tone_section, 0.5, 2.0, 1.0, self.update_image, "Shadows")
-        self.light_slider = self.create_slider(tone_section, 0.5, 2.0, 1.0, self.update_image, "Lights")
-        self.color_slider = self.create_slider(tone_section, 0.0, 2.0, 1.0, self.update_image, "Saturation")
-        self.dehaze_slider = self.create_slider(tone_section, -2.0, 2.0, 0.0, self.update_image, "Dehaze")
-        self.fog_slider = self.create_slider(tone_section, -2.0, 2.0, 0.0, self.update_image, "Fog")
+        self.brightness_slider = self.create_slider(tone_section, -100, 100, 0, lambda value: self.update_image('brightness', value), "Brightness")
+        self.contrast_slider = self.create_slider(tone_section, 0.1, 2.0, 1.0, lambda value: self.update_image('bontrast', value), "Contrast")
+        self.shadow_slider = self.create_slider(tone_section, 0.5, 2.0, 1.0, lambda value: self.update_image('shadows', value), "Shadows")
+        self.light_slider = self.create_slider(tone_section, 0.5, 2.0, 1.0, lambda value: self.update_image('lights', value), "Lights")
+        self.color_slider = self.create_slider(tone_section, 0.0, 2.0, 1.0, lambda value: self.update_image('saturation', value), "Saturation")
+        self.dehaze_slider = self.create_slider(tone_section, -2.0, 2.0, 0.0, lambda value: self.update_image('dehaze', value), "Dehaze")
+        self.fog_slider = self.create_slider(tone_section, -2.0, 2.0, 0.0, lambda value: self.update_image('fog', value), "Fog")
 
 
         # HSL
@@ -109,9 +114,9 @@ class ImageEditorApp(ctk.CTk):
 
         colors = ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]
         for color in colors:
-            self.hue_sliders[color] = self.create_slider(self.hsl_section, -180, 180, 0, self.update_image, f"{color} Hue")
-            self.sat_sliders[color] = self.create_slider(self.hsl_section, -1.0, 1.0, 0, self.update_image, f"{color} Saturation")
-            self.lum_sliders[color] = self.create_slider(self.hsl_section, -1.0, 1.0, 0, self.update_image, f"{color} Luminance")
+            self.hue_sliders[color] = self.create_slider(self.hsl_section, -180, 180, 0, lambda value: self.update_image(f"hue_adj", value), f"{color} Hue")
+            self.sat_sliders[color] = self.create_slider(self.hsl_section, -1.0, 1.0, 0, lambda value: self.update_image(f"sat_adj", value), f"{color} Saturation")
+            self.lum_sliders[color] = self.create_slider(self.hsl_section, -1.0, 1.0, 0, lambda value: self.update_image(f"lum_adj", value), f"{color} Luminance")
 
 
 
@@ -136,6 +141,7 @@ class ImageEditorApp(ctk.CTk):
 
         slider = ctk.CTkSlider(frame, from_=from_, to=to, command=command)
         slider.set(default)
+        print(f' ----------- slider {text} ------------- ', slider.get())
         slider.pack(fill="x")
 
         return slider
@@ -189,17 +195,24 @@ class ImageEditorApp(ctk.CTk):
     #         return
     #     threading.Thread(target=self.apply_adjustments).start()
 
-    def update_image(self, _=None):
+    def update_image(self, tipo, _=None):
+    # def update_image(self, tipo,):
         if self.original_image is None:
             return
-        self.executor.submit(self.apply_adjustments) 
+        self.executor.submit(self.apply_adjustments, tipo) 
 
 
 
-    def apply_adjustments(self, high_res=False):
+
+
+
+    def apply_adjustments(self, tipo, high_res=False):
+
+        print('----------- tipo ------------', tipo)
         img = self.original_image.copy()
         # img = self.original_image if high_res else self.display_image.copy()
 
+        
         brightness = self.brightness_slider.get()
         contrast = self.contrast_slider.get()
         shadow_factor = self.shadow_slider.get()
@@ -207,38 +220,6 @@ class ImageEditorApp(ctk.CTk):
         saturation = self.color_slider.get()
         dehaze = self.dehaze_slider.get()
         fog = self.fog_slider.get()
-
-        # HSL
-        # hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
-        # sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
-        # lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
-
-        # img = apply_hsl_superfast(img, hue_adj, sat_adj, lum_adj)
-
-        # # 1. Read HSL slider values as dictionaries
-        # hue_adj_dict = {color: self.hue_sliders[color].get() for color in self.hue_sliders}
-        # sat_adj_dict = {color: self.sat_sliders[color].get() for color in self.sat_sliders}
-        # lum_adj_dict = {color: self.lum_sliders[color].get() for color in self.lum_sliders}
-
-        # # Create hue LUT once and reuse
-        # # Order of bands must match the LUT creation!
-        # band_order = ['Red', 'Orange', 'Yellow', 'Green', 'Aqua', 'Blue', 'Purple', 'Magenta']
-
-        # # 3. Convert to arrays
-        # hue_adj = np.array([hue_adj_dict.get(c, 0) for c in band_order], dtype=np.float32)
-        # sat_adj = np.array([sat_adj_dict.get(c, 0) for c in band_order], dtype=np.float32)
-        # lum_adj = np.array([lum_adj_dict.get(c, 0) for c in band_order], dtype=np.float32)
-
-        # # Convert to HLS
-        # hls = cv2.cvtColor(img, cv2.COLOR_BGR2HLS).astype(np.float32)
-
-        # # Apply fast HSL logic
-        # hue_lut = create_hue_band_lut()
-        # adjusted_hls = apply_hsl_core_lut(hls, hue_lut, hue_adj, sat_adj, lum_adj)
-
-        # # Back to BGR
-        # img = cv2.cvtColor(adjusted_hls.astype(np.uint8), cv2.COLOR_HLS2BGR)
-
 
 
         # White balance
@@ -279,6 +260,171 @@ class ImageEditorApp(ctk.CTk):
 
         self.display_image = img
         self.show_image(self.display_image)
+
+
+
+
+
+
+
+    # def apply_adjustments(self, tipo, high_res=False):
+
+    #     print('----------- tipo ------------', tipo)
+    #     img = self.original_image.copy()
+    #     # img = self.original_image if high_res else self.display_image.copy()
+
+    #     brightness = self.brightness_slider.get()
+    #     contrast = self.contrast_slider.get()
+    #     shadow_factor = self.shadow_slider.get()
+    #     light_factor = self.light_slider.get()
+    #     saturation = self.color_slider.get()
+    #     dehaze = self.dehaze_slider.get()
+    #     fog = self.fog_slider.get()
+
+    #     # HSL
+    #     # hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
+    #     # sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
+    #     # lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
+
+    #     # img = apply_hsl_superfast(img, hue_adj, sat_adj, lum_adj)
+
+    #     # # 1. Read HSL slider values as dictionaries
+    #     # hue_adj_dict = {color: self.hue_sliders[color].get() for color in self.hue_sliders}
+    #     # sat_adj_dict = {color: self.sat_sliders[color].get() for color in self.sat_sliders}
+    #     # lum_adj_dict = {color: self.lum_sliders[color].get() for color in self.lum_sliders}
+
+    #     # # Create hue LUT once and reuse
+    #     # # Order of bands must match the LUT creation!
+    #     # band_order = ['Red', 'Orange', 'Yellow', 'Green', 'Aqua', 'Blue', 'Purple', 'Magenta']
+
+    #     # # 3. Convert to arrays
+    #     # hue_adj = np.array([hue_adj_dict.get(c, 0) for c in band_order], dtype=np.float32)
+    #     # sat_adj = np.array([sat_adj_dict.get(c, 0) for c in band_order], dtype=np.float32)
+    #     # lum_adj = np.array([lum_adj_dict.get(c, 0) for c in band_order], dtype=np.float32)
+
+    #     # # Convert to HLS
+    #     # hls = cv2.cvtColor(img, cv2.COLOR_BGR2HLS).astype(np.float32)
+
+    #     # # Apply fast HSL logic
+    #     # hue_lut = create_hue_band_lut()
+    #     # adjusted_hls = apply_hsl_core_lut(hls, hue_lut, hue_adj, sat_adj, lum_adj)
+
+    #     # # Back to BGR
+    #     # img = cv2.cvtColor(adjusted_hls.astype(np.uint8), cv2.COLOR_HLS2BGR)
+
+
+
+    #     # White balance
+    #     temperature = int(self.temperature_slider.get())
+    #     tint = int(self.tint_slider.get())
+
+    #     # # Eyedropper
+    #     # if hasattr(self, 'eyedropper_pixel') and self.eyedropper_pixel is not None:
+    #     #     img = apply_white_balance_eyedropper(img, self.eyedropper_pixel)
+
+    #     # Kelvin-based temperature adjustment
+    #     img = apply_kelvin_temperature(img, temperature)
+    #     img = apply_tint_shift(img, tint)
+
+    #     img = apply_brightness(img, brightness)
+    #     img = apply_contrast(img, contrast)
+    #     img = adjust_saturation_rgb(img, saturation)
+    #     img = adjust_shadows_lights(img, shadow_factor, light_factor)
+    #     img = self.dehaze_effect(img, dehaze)
+    #     img = self.fog_effect(img, fog)
+
+    #     # Curve
+    #     lut = self.generate_lut()
+
+    #     b, g, r = cv2.split(img)
+    #     r = cv2.LUT(r, lut)
+    #     g = cv2.LUT(g, lut)
+    #     b = cv2.LUT(b, lut)
+    #     img = cv2.merge((b, g, r))
+
+    #     hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
+    #     sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
+    #     lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
+
+    #     img = apply_hsl_superfast(img, hue_adj, sat_adj, lum_adj)
+
+    #     # print(' ----------- adjustment dimensions --------------', img.shape)
+
+    #     self.display_image = img
+    #     self.show_image(self.display_image)
+
+
+
+
+
+
+
+    # def apply_adjustments(self, tipo, high_res=False):
+    #     img = self.original_image.copy()
+
+    #     hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
+    #     sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
+    #     lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
+
+    #     # img = apply_hsl_superfast(img, hue_adj, sat_adj, lum_adj)
+
+    #     adjustments = {}
+    #     adjustments['temperature'] = int(self.temperature_slider.get())
+    #     adjustments['tint'] = int(self.tint_slider.get())
+    #     adjustments['brightness'] = self.brightness_slider.get()
+    #     adjustments['contrast'] = self.contrast_slider.get()
+    #     adjustments['shadow_factor'] = self.shadow_slider.get()
+    #     adjustments['light_factor'] = self.light_slider.get()
+    #     adjustments['saturation'] = self.color_slider.get()
+    #     adjustments['dehaze'] = self.dehaze_slider.get()
+    #     adjustments['fog'] = self.fog_slider.get() 
+    #     adjustments['hue_adj'] = hue_adj 
+    #     adjustments['sat_adj'] = sat_adj
+    #     adjustments['lum_adj'] = lum_adj
+
+    #     for key in adjustments.keys():
+    #         if key == tipo:
+    #             print('----------- adjustments key ---------------', tipo)
+    #             with ThreadPoolExecutor(max_workers=8) as executor:
+    #                 tiles = list(executor.map(lambda tile: process_tile(tile, tipo), tiles))
+
+    #                 tiles = split_image_into_tiles(img)
+
+    #                 img = merge_tiles_back(tiles)
+
+    #                 self.display_image = img
+    #                 self.show_image(self.display_image)
+
+                    
+    #                 """
+    #                 pridumat funkcyju, update changes gdie nużno perezapisywać tiekuszczeje izobrażenije 
+    #                 s nowymi izmienienijami, skażem jesli my chotim dobawic brightness to pierezapisywajem 
+    #                 izobr. s brightness. Potom chotimdobawić lightness, to dobowliajem uze k periezap. izobr,
+    #                 gdzie uże jesć nowoje britness i t.d.
+    #                 """
+
+    #     print('----------- apply_adjustments sat_adj ---------------', adjustments['sat_adj'])
+    #     print('----------- apply_adjustments lum_adj ---------------', adjustments['lum_adj'])
+
+    #     # Split into tiles
+    #     # tiles = split_image_into_tiles(img)
+
+    #     # Process tiles in parallel
+    #     # with ThreadPoolExecutor(max_workers=8) as executor:
+    #     #     tiles = list(executor.map(lambda tile: process_tile(tile, adjustments), tiles))
+
+    #     # with Pool(processes=cpu_count()) as pool:
+    #     #     tiles = pool.starmap(process_tile, [(tile, adjustments) for tile in tiles])
+
+    #         # print([type(t) for t in tiles])
+
+    #     # Merge back
+    #     # img = merge_tiles_back(tiles)
+
+    #     # self.display_image = img
+    #     # self.show_image(self.display_image)
+
+
 
 
 
