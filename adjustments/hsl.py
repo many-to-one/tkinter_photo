@@ -9,6 +9,7 @@ def normalize_keys(d):
 
 @njit(parallel=True)
 def apply_hsl_core_lut(hls_img, hue_band_lut, hue_adj_arr, sat_adj_arr, lum_adj_arr):
+    print(' --------------- hue_adj_arr --------------- ', hue_adj_arr)
     print(' --------------- sat_adj_arr --------------- ', sat_adj_arr)
     print(' --------------- lum_adj_arr --------------- ', lum_adj_arr)
     h, w, _ = hls_img.shape
@@ -26,14 +27,17 @@ def apply_hsl_core_lut(hls_img, hue_band_lut, hue_adj_arr, sat_adj_arr, lum_adj_
     return hls_img
 
 
+
+
 def apply_hsl_superfast(img_bgr, hue_adj, sat_adj, lum_adj):
+
+    print(' ------------------ hue_adj: ------------------ ', hue_adj)
+    print(' ------------------ sat_adj: ------------------ ', sat_adj)
+    print(' ------------------ lum_adj: ------------------ ', lum_adj)
 
     hue_adj = normalize_keys(hue_adj)
     sat_adj = normalize_keys(sat_adj)
     lum_adj = normalize_keys(lum_adj)
-
-    print(' ------------------ sat_adj: ------------------ ', sat_adj)
-    # print(' ------------------ sat_adj_arr: ------------------ ', sat_adj_arr)
 
     hue_adj_arr = np.array([hue_adj.get(b, 0) for b in band_names], dtype=np.int16)
     sat_adj_arr = np.array([sat_adj.get(b, 0) for b in band_names], dtype=np.int16)
