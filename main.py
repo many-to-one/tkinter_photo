@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Pool, cpu_count
 
 import rawpy
+import colorsys
 
 from adjustments.brightness import apply_brightness
 from adjustments.contrast import apply_contrast
@@ -52,10 +53,74 @@ class ImageEditorApp(ctk.CTk):
         self.root.bind('<Control-plus>', self.zoom_in)
         self.root.bind('<Control-equal>', self.zoom_in)  # Handle Ctrl + = (some keyboards)
 
+
         self.executor = ThreadPoolExecutor(max_workers=1)
 
         # UI Setup
         self.setup_ui()
+        self.start_warmup()
+
+
+    def start_warmup(self):
+        self.show_info_window("Initializing...")
+        threading.Thread(target=self.run_warmup_and_close_info, daemon=True).start()
+
+    def run_warmup_and_close_info(self):
+        # self.warm_up_processing()
+        self.warm_up_processing(progress_callback=self.update_progress)
+        self.info_window.after(0, self.info_window.destroy)
+
+
+    def warm_up_processing(self, progress_callback=None):
+
+        dummy = np.zeros((512, 512, 3), dtype=np.uint8)
+        self.update_progress(0)
+        dummy[:] = (127, 127, 127)
+        self.update_progress(20)
+
+        # Warm up OpenCV and Pillow
+        _ = cv2.cvtColor(dummy, cv2.COLOR_BGR2RGB)
+        self.update_progress(30)
+        _ = Image.fromarray(dummy)
+        self.update_progress(40)
+        _ = apply_kelvin_temperature(dummy, 5000)
+        self.update_progress(50)
+        _ = apply_brightness(dummy, 1.0)
+        self.update_progress(60)
+        _ = apply_contrast(dummy, 1.0)
+        self.update_progress(70)
+        _ = adjust_saturation_rgb(dummy, 1.0)
+        self.update_progress(80)
+        for i in range(81, 99):
+            self.update_progress(i)
+        _ = apply_hsl_superfast(dummy, {'red': 0}, {'red': 0}, {'red': 0})
+        self.update_progress(100)
+        _ = cv2.LUT(dummy, np.arange(256, dtype=np.uint8))  # warm up LUT
+
+    
+    # def update_progress(self, value):
+    #     self.progress_bar.set(value)
+    #     percent_text = f"{int(value)}%" #f"{int(value * 100)}%"
+    #     self.progress_percent_label.configure(text=percent_text)
+
+    def update_progress(self, value):
+        self.progress_bar.set(value)
+        percent = int(value)
+        self.progress_percent_label.configure(text=f"{percent}%")
+
+        # Color interpolation between green (0%) to red (100%)
+        # Simple linear interpolation between green and red RGB colors
+
+        # Green RGB: (0, 255, 0), Red RGB: (255, 0, 0)
+        r = int(255 * (value / 100))        # Red increases with progress
+        g = int(255 * (1 - value / 100))    # Green decreases with progress
+        b = 0                               # No blue
+        color = f"#{g:02x}{r:02x}{b:02x}"
+
+        self.progress_bar.configure(progress_color=color)
+
+
+
 
 
     def zoom_in(self, event=None):
@@ -80,6 +145,7 @@ class ImageEditorApp(ctk.CTk):
 
 
     def setup_ui(self): 
+
         self.image_panel = ctk.CTkLabel(self, text="", bg_color="#333333")
         self.image_panel.pack(side="left", expand=True, fill="both")
 
@@ -177,6 +243,54 @@ class ImageEditorApp(ctk.CTk):
 
         save_image_btn = ctk.CTkButton(controls, text="Save as...", command=self.save_high_res_image_pil)
         save_image_btn.pack(pady=10)
+
+
+    # import customtkinter as ctk
+
+    def show_info_window(self, text):
+        self.info_window = ctk.CTkToplevel(self.root)
+        self.info_window.title("Initializing")
+        self.info_window.geometry("300x100")
+        self.info_window.grab_set() # Block interaction with main window
+        self.info_window.resizable(False, False)
+
+        # Center the window
+        self.root.update_idletasks()
+        root_x = self.root.winfo_rootx()
+        # print(' ----------- root_x ------------- ', root_x)
+        root_y = self.root.winfo_rooty()
+        # print(' ----------- root_y ------------- ', root_y)
+        root_width = self.root.winfo_width()
+        # print(' ----------- root_width ------------- ', root_width)
+        root_height = self.root.winfo_height()
+        # print(' ----------- root_height ------------- ', root_height)
+        x = root_x + (root_width // 2) + 150
+        # print(' ----------- X ------------- ', root_y)
+        y = root_y + (root_height // 2) + 50
+        # print(' ----------- Y ------------- ', root_y)
+        self.info_window.geometry(f"+{x}+{y}")
+
+        # Use CTkLabel with dark background
+        label = ctk.CTkLabel(
+            self.info_window,
+            text=text,
+            font=ctk.CTkFont(size=14),
+            text_color="white" 
+        )
+        label.pack(expand=True, fill="both", padx=10, pady=10)
+
+        # Create indeterminate progress bar
+        self.progress_bar = ctk.CTkProgressBar(self.info_window, mode="indeterminate", width=200)
+        self.progress_bar.pack(pady=10)
+        self.progress_bar.start()
+
+        self.progress_percent_label = ctk.CTkLabel(
+        self.info_window, text="0%", text_color="white", font=("Arial", 12)
+        )
+        self.progress_percent_label.pack(pady=(0, 10))
+
+        # self.info_window.update()
+        # self.info_window.grab_set()
 
 
 
@@ -323,7 +437,6 @@ class ImageEditorApp(ctk.CTk):
         print('----------- tipo ------------', tipo)
         print('----------- value ///// ------------', value)
         img = self.small_image.copy()
-        # img = self.original_image
 
         # Tone
         brightness = self.brightness_slider.get()
