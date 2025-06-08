@@ -18,10 +18,19 @@ from adjustments.saturation import adjust_saturation_rgb
 from adjustments.curve import *
 from adjustments.shadows_lights import adjust_shadows_lights
 from adjustments.white_balance import *
-from adjustments.dehaze import dehaze_effect
-from adjustments.fog import fog_effect
+from adjustments.dehaze_effect import dehaze_effect
+from adjustments.fog_effect import fog_effect
 from adjustments.hsl import *
 from adjustments.tiles import *
+from adjustments.camera_calibration import *
+
+from apply_section.apply_adjustments import apply_adjustments
+from apply_section.apply_adjustments_high_res import apply_adjustments_high_res
+
+
+from info_windows.window_process import InfoWindow
+from info_windows.init_window import InitWindow
+from zoom.zoom import Zoom
 
 # Theme
 ctk.set_appearance_mode("Dark")
@@ -37,6 +46,35 @@ class ImageEditorApp(ctk.CTk):
         self.title("Image Editor")
         self.geometry("1000x600")
         self.configure(bg="#212121")  # Set background color
+
+        # ---------------------------------------------------- #
+        # # Get screen width and height from parent
+        # screen_width = self.winfo_screenwidth()
+        # screen_height = self.winfo_screenheight()
+
+        # # Calculate position to center window
+        # window_width = 300
+        # window_height = 100
+        # x_position = (screen_width // 2) - (window_width // 2)
+        # y_position = (screen_height // 2) - (window_height // 2)
+
+        # # Apply centered geometry
+        # self.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
+
+        # # Display message
+        # label = ctk.CTkLabel(self, text='Image Editor', font=ctk.CTkFont(size=14), text_color="white")
+        # label.pack(expand=True, fill="both", padx=10, pady=10)
+
+        # # Create indeterminate progress bar
+        # self.progress_bar = ctk.CTkProgressBar(self, mode="indeterminate", width=200)
+        # self.progress_bar.pack(pady=10)
+        # self.progress_bar.start()
+
+        # self.progress_percent_label = ctk.CTkLabel(
+        # self, text="0%", text_color="white", font=("Arial", 12)
+        # )
+        # self.progress_percent_label.pack(pady=(0, 10))
+        # ---------------------------------------------------- #
 
         # Image variables
         self.original_image = None
@@ -58,70 +96,45 @@ class ImageEditorApp(ctk.CTk):
 
         # UI Setup
         self.setup_ui()
-        self.start_warmup()
+        # self.start_warmup()
+        # self.start_init_window(self.run_warmup_and_close_info, "Initializing...")
+        self.start_init("Initializing...")
 
 
-    def start_warmup(self):
-        self.show_info_window("Initializing...")
-        threading.Thread(target=self.run_warmup_and_close_info, daemon=True).start()
+# ---------------------------------------------------------------------------------- #
+# Info window and process                                                           #
+# ---------------------------------------------------------------------------------- #
 
-    def run_warmup_and_close_info(self):
-        # self.warm_up_processing()
-        self.warm_up_processing(progress_callback=self.update_progress)
-        self.info_window.after(0, self.info_window.destroy)
+    def start_process(self, target, text):
+        """Start a process and display the info window while running."""
+        self.info_window = InfoWindow(self, text)  # Open InfoWindow
+        threading.Thread(target=self.run_process, args=(target,), daemon=True).start()
 
+    def run_process(self, target):
+        """Execute the function and close the info window when done."""
+        target()  # Run the function
+        self.info_window.destroy()
 
-    def warm_up_processing(self, progress_callback=None):
+# ---------------------------------------------------------------------------------- #
+# End of info window and proccess                                                    #
+# ---------------------------------------------------------------------------------- #
 
-        dummy = np.zeros((512, 512, 3), dtype=np.uint8)
-        self.update_progress(0)
-        dummy[:] = (127, 127, 127)
-        self.update_progress(20)
+# ---------------------------------------------------------------------------------- #
+# Init proccess with info window                                                     #
+# ---------------------------------------------------------------------------------- #
 
-        # Warm up OpenCV and Pillow
-        _ = cv2.cvtColor(dummy, cv2.COLOR_BGR2RGB)
-        self.update_progress(30)
-        _ = Image.fromarray(dummy)
-        self.update_progress(40)
-        _ = apply_kelvin_temperature(dummy, 5000)
-        self.update_progress(50)
-        _ = apply_brightness(dummy, 1.0)
-        self.update_progress(60)
-        _ = apply_contrast(dummy, 1.0)
-        self.update_progress(70)
-        _ = adjust_saturation_rgb(dummy, 1.0)
-        self.update_progress(80)
-        for i in range(81, 99):
-            self.update_progress(i)
-        _ = apply_hsl_superfast(dummy, {'red': 0}, {'red': 0}, {'red': 0})
-        self.update_progress(100)
-        _ = cv2.LUT(dummy, np.arange(256, dtype=np.uint8))  # warm up LUT
+    def start_init(self, text):
+        """Start a process and display the info window while running."""
+        self.info_window = InitWindow(self, text)  # Open InfoWindow
+        
+        
+# ---------------------------------------------------------------------------------- #
+# End of Init proccess with info window                                              #
+# ---------------------------------------------------------------------------------- #
 
-    
-    # def update_progress(self, value):
-    #     self.progress_bar.set(value)
-    #     percent_text = f"{int(value)}%" #f"{int(value * 100)}%"
-    #     self.progress_percent_label.configure(text=percent_text)
-
-    def update_progress(self, value):
-        self.progress_bar.set(value)
-        percent = int(value)
-        self.progress_percent_label.configure(text=f"{percent}%")
-
-        # Color interpolation between green (0%) to red (100%)
-        # Simple linear interpolation between green and red RGB colors
-
-        # Green RGB: (0, 255, 0), Red RGB: (255, 0, 0)
-        r = int(255 * (value / 100))        # Red increases with progress
-        g = int(255 * (1 - value / 100))    # Green decreases with progress
-        b = 0                               # No blue
-        color = f"#{g:02x}{r:02x}{b:02x}"
-
-        self.progress_bar.configure(progress_color=color)
-
-
-
-
+# ---------------------------------------------------------------------------------- #
+# Zoom logic                                                                         #
+# ---------------------------------------------------------------------------------- #
 
     def zoom_in(self, event=None):
         self.zoom_level = min(self.zoom_level + self.zoom_step, 10.0)
@@ -142,6 +155,10 @@ class ImageEditorApp(ctk.CTk):
         elif event.num == 5:
             self.zoom_out()
 
+
+# ---------------------------------------------------------------------------------- #
+# Enf of Zoom logic                                                                  #
+# ---------------------------------------------------------------------------------- #
 
 
     def setup_ui(self): 
@@ -179,11 +196,6 @@ class ImageEditorApp(ctk.CTk):
         reset_curve_btn = ctk.CTkButton(controls, text="Reset Curve", command=self.reset_curve)
         reset_curve_btn.pack(pady=10)
 
-        # End curve
-
-        # Accordion sections
-
-        # Sliders for adjustments
 
         # White balance accordion section
         white_balance_section = self.create_accordion_section(controls, "White Balance")
@@ -208,13 +220,6 @@ class ImageEditorApp(ctk.CTk):
         self.sat_sliders = {}
         self.lum_sliders = {}
 
-        # colors = ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]
-        # for color in colors:
-        #     self.hue_sliders[color] = self.create_slider(self.hsl_section, -180, 180, 0, lambda value: self.update_image(f"hue_adj, {color}", value), f"{color} Hue")
-        #     self.sat_sliders[color] = self.create_slider(self.hsl_section, -180, 180, 0, lambda value: self.update_image(f"sat_adj, {color}", value), f"{color} Saturation")
-        #     self.lum_sliders[color] = self.create_slider(self.hsl_section, -180, 180, 0, lambda value: self.update_image(f"lum_adj, {color}", value), f"{color} Luminance")
-
-
         colors = ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]
         for color in colors:
             self.hue_sliders[color] = self.create_slider(
@@ -237,60 +242,57 @@ class ImageEditorApp(ctk.CTk):
             )
 
 
+        # Calibration Sliders
+        self.calibration_section = self.create_accordion_section(controls, "Camera Calibration")
+
+        self.shadow_hue_sliders = {}
+        self.shadow_sat_sliders = {}
+        self.primary_hue_sliders = {}
+        self.primary_sat_sliders = {}
+
+        # Shadows: Red, Green, Blue
+        shadow_colors = ["Red", "Green", "Blue"]
+        for color in shadow_colors:
+            self.shadow_hue_sliders[color] = self.create_slider(
+                self.calibration_section, -1.0, 1.0, 0.0,
+                command=None,
+                text=f"Shadows {color} Hue",
+                tipo=f"shadows_hue_adj, {color}"
+            )
+            self.shadow_sat_sliders[color] = self.create_slider(
+                self.calibration_section, 0.0, 2.0, 1.0,
+                # self.calibration_section, -180, 180, 1.0,
+                command=None,
+                text=f"Shadows {color} Saturation",
+                tipo=f"shadows_sat_adj, {color}"
+            )
+
+        # RGB Primaries: Red, Green, Blue
+        for color in shadow_colors:  # same as RGB
+            self.primary_hue_sliders[color] = self.create_slider(
+                self.calibration_section, -1.0, 1.0, 0.0,
+                # self.calibration_section, -180, 180, 1.0,
+                command=None,
+                text=f"{color} Primary Hue",
+                tipo=f"primary_hue_adj, {color}"
+            )
+            self.primary_sat_sliders[color] = self.create_slider(
+                self.calibration_section, 0.0, 2.0, 1.0,
+                # self.calibration_section, -180, 180, 1.0,
+                command=None,
+                text=f"{color} Primary Saturation",
+                tipo=f"primary_sat_adj, {color}"
+            )
+
+
+
 
         reset_btn = ctk.CTkButton(controls, text="Reset", command=self.reset_sliders)
         reset_btn.pack(pady=10)
 
-        save_image_btn = ctk.CTkButton(controls, text="Save as...", command=self.save_high_res_image_pil)
+        save_image_btn = ctk.CTkButton(controls, text="Save as...", command=lambda: self.start_process(self.save_high_res_image_pil, "Saving..."))
         save_image_btn.pack(pady=10)
-
-
-    # import customtkinter as ctk
-
-    def show_info_window(self, text):
-        self.info_window = ctk.CTkToplevel(self.root)
-        self.info_window.title("Initializing")
-        self.info_window.geometry("300x100")
-        self.info_window.grab_set() # Block interaction with main window
-        self.info_window.resizable(False, False)
-
-        # Center the window
-        self.root.update_idletasks()
-        root_x = self.root.winfo_rootx()
-        # print(' ----------- root_x ------------- ', root_x)
-        root_y = self.root.winfo_rooty()
-        # print(' ----------- root_y ------------- ', root_y)
-        root_width = self.root.winfo_width()
-        # print(' ----------- root_width ------------- ', root_width)
-        root_height = self.root.winfo_height()
-        # print(' ----------- root_height ------------- ', root_height)
-        x = root_x + (root_width // 2) + 150
-        # print(' ----------- X ------------- ', root_y)
-        y = root_y + (root_height // 2) + 50
-        # print(' ----------- Y ------------- ', root_y)
-        self.info_window.geometry(f"+{x}+{y}")
-
-        # Use CTkLabel with dark background
-        label = ctk.CTkLabel(
-            self.info_window,
-            text=text,
-            font=ctk.CTkFont(size=14),
-            text_color="white" 
-        )
-        label.pack(expand=True, fill="both", padx=10, pady=10)
-
-        # Create indeterminate progress bar
-        self.progress_bar = ctk.CTkProgressBar(self.info_window, mode="indeterminate", width=200)
-        self.progress_bar.pack(pady=10)
-        self.progress_bar.start()
-
-        self.progress_percent_label = ctk.CTkLabel(
-        self.info_window, text="0%", text_color="white", font=("Arial", 12)
-        )
-        self.progress_percent_label.pack(pady=(0, 10))
-
-        # self.info_window.update()
-        # self.info_window.grab_set()
+    
 
 
 
@@ -330,6 +332,7 @@ class ImageEditorApp(ctk.CTk):
     def on_slider_release(self, event):
         # Called only when user releases the slider
         print(" ######################## Released at: ######################## ", current_slider_value)
+        print(" ######################## on_slider_release: ######################## ", slider_tipo)
         self.apply_adjustments(slider_tipo, current_slider_value)
 
     def update_image(self, value, tipo, _=None):
@@ -385,53 +388,6 @@ class ImageEditorApp(ctk.CTk):
 
 
 
-    def apply_adjustments_high_res(self):
-        img = self.original_image.copy()
-
-        # Tone
-        brightness = self.brightness_slider.get()
-        contrast = self.contrast_slider.get()
-        shadow_factor = self.shadow_slider.get()
-        light_factor = self.light_slider.get()
-        saturation = self.color_slider.get()
-        dehaze = self.dehaze_slider.get()
-        fog = self.fog_slider.get()
-
-        # White balance
-        temperature = int(self.temperature_slider.get())
-        tint = int(self.tint_slider.get())
-
-        img = apply_kelvin_temperature(img, temperature)
-        img = apply_tint_shift(img, tint)
-        img = apply_brightness(img, brightness)
-        img = apply_contrast(img, contrast)
-        img = adjust_saturation_rgb(img, saturation)
-        img = adjust_shadows_lights(img, shadow_factor, light_factor)
-        img = self.dehaze_effect(img, dehaze)
-        img = self.fog_effect(img, fog)
-
-        hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
-        sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
-        lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
-
-        img = apply_hsl_superfast(img, hue_adj, sat_adj, lum_adj)
-
-        self.curve_base_image = img.copy()
-
-        lut = self.generate_lut()
-        b, g, r = cv2.split(img)
-        r = cv2.LUT(r, lut)
-        g = cv2.LUT(g, lut)
-        b = cv2.LUT(b, lut)
-        img = cv2.merge((b, g, r))
-
-        self.high_res_result = img  # Store the final high-res result
-
-
-
-
-
-
     def apply_adjustments(self, tipo, value, high_res=False):
 
         print('----------- tipo ------------', tipo)
@@ -458,14 +414,58 @@ class ImageEditorApp(ctk.CTk):
         img = apply_contrast(img, contrast)
         img = adjust_saturation_rgb(img, saturation)
         img = adjust_shadows_lights(img, shadow_factor, light_factor)
-        img = self.dehaze_effect(img, dehaze)
-        img = self.fog_effect(img, fog)
+        img = dehaze_effect(img, dehaze)
+        img = fog_effect(img, fog)
 
-        hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
-        sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
-        lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
+        # hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
+        # sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
+        # lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
 
-        img = apply_hsl_superfast(img, hue_adj, sat_adj, lum_adj)
+        # print(' ----------- hue_adj ------------ ', hue_adj)
+        # print(' ----------- sat_adj ------------ ', sat_adj)
+        # print(' ----------- lum_adj ------------ ', lum_adj)
+
+        # img = apply_hsl_superfast(img, hue_adj, sat_adj, lum_adj)   
+
+        img = apply_hsl_superfast(
+            img, 
+            {'Red': 0, 'Orange': 0, 'Yellow': 0, 'Green': 0, 'Aqua': 0, 'Blue': 0, 'Purple': 0, 'Magenta': 0}, 
+            {'Red': 0, 'Orange': 0, 'Yellow': 0, 'Green': 0, 'Aqua': 0, 'Blue': 0, 'Purple': 0, 'Magenta': 0}, 
+            {'Red': 0, 'Orange': 0, 'Yellow': 0, 'Green': 0, 'Aqua': 0, 'Blue': 0, 'Purple': 0, 'Magenta': 0}
+        ) 
+
+        primary_hue = {
+            "Red": self.primary_hue_sliders["Red"].get(),
+            "Green": self.primary_hue_sliders["Green"].get(),
+            "Blue": self.primary_hue_sliders["Blue"].get(),
+        }
+        primary_sat = {
+            "Red": self.primary_sat_sliders["Red"].get(),
+            "Green": self.primary_sat_sliders["Green"].get(),
+            "Blue": self.primary_sat_sliders["Blue"].get(),
+        }
+
+        print(' ----------- primary_hue ------------ ', primary_hue)
+        print(' ----------- primary_sat ------------ ', primary_sat)
+
+        img = apply_primary_calibration_rgb(
+            img,
+            primary_hue["Red"], primary_hue["Green"], primary_hue["Blue"],
+            primary_sat["Red"], primary_sat["Green"], primary_sat["Blue"]
+        )
+
+        shadow_hue = {
+            color: self.shadow_hue_sliders[color].get() for color in ["Red", "Green", "Blue"]
+        }
+        shadow_sat = {
+            color: self.shadow_sat_sliders[color].get() for color in ["Red", "Green", "Blue"]
+        }
+
+        img = apply_shadow_calibration_rgb(
+            img,
+            shadow_hue['Red'], shadow_hue['Green'], shadow_hue['Blue'],
+            shadow_sat['Red'], shadow_sat['Green'], shadow_sat['Blue']
+        )
 
 
         # # Eyedropper
@@ -484,61 +484,10 @@ class ImageEditorApp(ctk.CTk):
         b = cv2.LUT(b, lut)
         img = cv2.merge((b, g, r))
 
-        # print(' ----------- adjustment dimensions --------------', img.shape)
 
         self.display_image = img
         self.show_image(self.display_image)
 
-        # Start background thread for full-resolution export
-        thread = threading.Thread(target=self.apply_adjustments_high_res)
-        thread.start()
-
-
-
-
-
-##############################################################################################################################################
-############################################################ === DEHAZE === ##################################################################
-##############################################################################################################################################
-
-    def dehaze_effect(self, img, strength):
-        if strength == 0:
-            return img
-
-        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        # print(' ------ dehaze_image ------', strength)
-
-        clahe = cv2.createCLAHE(clipLimit=2.0 + 4.0 * strength, tileGridSize=(8, 8))
-        cl = clahe.apply(l)
-
-        merged = cv2.merge((cl, a, b))
-        return cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
-
-##############################################################################################################################################
-############################################################### === FOG === ##################################################################
-##############################################################################################################################################
-
-    def fog_effect(self, img, strength):
-
-        """
-        Adds a fog effect by blending the image with a white layer.
-        fog_intensity: float between 0 (no fog) and 2.0 (max fog)
-        """
-        fog_intensity = np.clip(strength, 0.0, 2.0)
-
-        # Create a white image
-        fog_color = np.full_like(img, 255)
-
-        # Blend original with white
-        blend_strength = min(strength / 2.0, 1.0)
-        fogged = cv2.addWeighted(img, 1 - blend_strength, fog_color, blend_strength, 0)
-
-        # Optional: reduce contrast slightly
-        if strength > 0.1:
-            fogged = apply_contrast(fogged, 1.0 - (strength * 0.15))  # adjust as needed
-
-        return fogged
 
 
 
@@ -608,8 +557,8 @@ class ImageEditorApp(ctk.CTk):
         self.display_image = img
         self.show_image(self.display_image)
 
-        thread = threading.Thread(target=self.apply_adjustments_high_res)
-        thread.start()
+        # thread = threading.Thread(target=self.apply_adjustments_high_res)
+        # thread.start()
 
     def draw_curve(self):
         self.canvas.delete("all")
@@ -663,19 +612,64 @@ class ImageEditorApp(ctk.CTk):
     # from PIL import Image
 
     def save_high_res_image_pil(self):
-        if hasattr(self, 'high_res_result') and self.high_res_result is not None:
+        
+        try:
+            res = apply_adjustments_high_res(
+                self.original_image.copy(),
+                
+                # Tone
+                self.brightness_slider.get(),
+                self.contrast_slider.get(),
+                self.shadow_slider.get(),
+                self.light_slider.get(),
+                self.color_slider.get(),
+                self.dehaze_slider.get(),
+                self.fog_slider.get(),
+
+                # White balance
+                int(self.temperature_slider.get()),
+                int(self.tint_slider.get()),
+
+                self.hue_sliders,
+                self.sat_sliders,
+                self.lum_sliders,
+
+                self.shadow_hue_sliders,
+                self.shadow_sat_sliders,
+                self.primary_hue_sliders,
+                self.primary_sat_sliders,
+
+                self.generate_lut()
+
+            )
+
+            if res is None:
+                # self.close_info_window()
+                raise ValueError("High-res image processing returned None.")
+
+
             file_path = filedialog.asksaveasfilename(
                 defaultextension=".jpg",
                 filetypes=[("JPEG", "*.jpg"), ("PNG", "*.png"), ("TIFF", "*.tiff"), ("All Files", "*.*")]
             )
-            if file_path:
-                img_bgr = np.clip(self.high_res_result, 0, 255).astype(np.uint8)
-                img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-                pil_img = Image.fromarray(img_rgb)
-                pil_img.save(file_path)
-                print(f"Image saved to {file_path}")
-        else:
-            print("No high-resolution result to save.")
+
+            if not file_path:
+                print("Save cancelled.")
+                # self.close_info_window()
+                return
+
+            img_bgr = np.clip(res, 0, 255).astype(np.uint8)
+            img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+            pil_img = Image.fromarray(img_rgb)
+            pil_img.save(file_path)
+            print(f"Image saved to {file_path}")
+
+        except Exception as e:
+            # self.close_info_window()
+            print("Failed to save image:", str(e))
+
+        # finally:
+            # self.close_info_window()
 
 
 if __name__ == "__main__":
