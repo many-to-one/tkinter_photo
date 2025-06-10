@@ -12,6 +12,7 @@ from multiprocessing import Pool, cpu_count
 import rawpy
 import colorsys
 
+from adjustments.mains import *
 from adjustments.brightness import apply_brightness
 from adjustments.contrast import apply_contrast
 from adjustments.saturation import adjust_saturation_rgb
@@ -196,19 +197,19 @@ class ImageEditorApp(ctk.CTk):
         colors = ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]
         for color in colors:
             self.hue_sliders[color] = self.create_slider(
-                self.hsl_section, -180, 180, 0,
+                self.hsl_section, -2.0, 2.0, 0,
                 command=None,
                 text=f"{color} Hue",
                 tipo=f"hue_adj, {color}"
             )
             self.sat_sliders[color] = self.create_slider(
-                self.hsl_section, -180, 180, 0,
+                self.hsl_section, 0.0, 2.0, 1,
                 command=None,
                 text=f"{color} Saturation",
                 tipo=f"sat_adj, {color}"
             )
             self.lum_sliders[color] = self.create_slider(
-                self.hsl_section, -180, 180, 0,
+                self.hsl_section, 0.0, 2.0, 1,
                 command=None,
                 text=f"{color} Luminance",
                 tipo=f"lum_adj, {color}"
@@ -381,11 +382,28 @@ class ImageEditorApp(ctk.CTk):
         sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
         lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
 
+        print('----------- hue_adj ------------', hue_adj)
+        print('----------- sat_adj ------------', sat_adj)
+        print('----------- lum_adj ------------', lum_adj)
+
+        # brightness = 0
+        # contrast = 1.0
+        # saturation = 1.0
+        # shadow = 1.0
+        # highlight = 1.0
+        # temperature = 0
+        # tint = 0
+        # h_arr = [0, 0, 0, 0, 0, 0]
+        # s_arr = [1, 1, 1, 1, 1, 1]
+        # l_arr = [1, 1, 1, 1, 1, 1]
+
+
         img = apply_all_adjustments_c(
             img,
             brightness, contrast, saturation,
             shadow_factor, light_factor,
             temperature, tint,
+            # h_arr, s_arr, l_arr
             [hue_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue"]],
             [sat_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue"]],
             [lum_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue"]],
