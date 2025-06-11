@@ -198,6 +198,7 @@ class ImageEditorApp(ctk.CTk):
         for color in colors:
             self.hue_sliders[color] = self.create_slider(
                 self.hsl_section, -2.0, 2.0, 0,
+                # self.hsl_section, 0.0, 1.0, 0,
                 command=None,
                 text=f"{color} Hue",
                 tipo=f"hue_adj, {color}"
@@ -360,6 +361,14 @@ class ImageEditorApp(ctk.CTk):
         self.show_image(self.display_image)
 
 
+    # Normalize temperature slider from 1000–10000 with 6500 neutral
+    def get_normalized_temperature(self):
+        kelvin = self.temperature_slider.get()
+        return (kelvin - 6500) / 35.0  # scale it to -157 to +100
+
+    def get_normalized_tint(self):
+        return self.tint_slider.get() / 1.0  # tint range is already -150 to +150
+
 
     def apply_adjustments(self, tipo, value, high_res=False):
 
@@ -375,8 +384,12 @@ class ImageEditorApp(ctk.CTk):
         fog = self.fog_slider.get()
 
         # White balance
-        temperature = int(self.temperature_slider.get())
-        tint = int(self.tint_slider.get())
+        # temperature = int(self.temperature_slider.get())
+        # tint = int(self.tint_slider.get())
+
+        temperature = self.get_normalized_temperature()
+        tint = self.get_normalized_tint()
+
 
         hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
         sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
@@ -385,18 +398,6 @@ class ImageEditorApp(ctk.CTk):
         print('----------- hue_adj ------------', hue_adj)
         print('----------- sat_adj ------------', sat_adj)
         print('----------- lum_adj ------------', lum_adj)
-
-        # brightness = 0
-        # contrast = 1.0
-        # saturation = 1.0
-        # shadow = 1.0
-        # highlight = 1.0
-        # temperature = 0
-        # tint = 0
-        # h_arr = [0, 0, 0, 0, 0, 0]
-        # s_arr = [1, 1, 1, 1, 1, 1]
-        # l_arr = [1, 1, 1, 1, 1, 1]
-
 
         img = apply_all_adjustments_c(
             img,
@@ -408,7 +409,6 @@ class ImageEditorApp(ctk.CTk):
             [sat_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue"]],
             [lum_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue"]],
         )
-
 
         self.display_image = img
         self.show_image(self.display_image)
