@@ -43,12 +43,21 @@ lib.apply_all_adjustments.argtypes = [
     ctypes.c_float, ctypes.c_float, ctypes.c_float,
     ctypes.c_float, ctypes.c_float,
     ctypes.c_float, ctypes.c_float,
+    ctypes.c_float, ctypes.c_float,
     ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float),
+    ctypes.c_float,
+    ctypes.c_float, ctypes.c_float, ctypes.c_float,
+    ctypes.c_float, ctypes.c_float, ctypes.c_float,
 ]
 
 def apply_all_adjustments_c(img: np.ndarray, brightness, contrast, saturation,
                              shadow, highlight, temperature, tint,
-                             hue_arr, sat_arr, lum_arr) -> np.ndarray:
+                             dehaze, fog,
+                             hue_arr, sat_arr, lum_arr,
+                             shadows_tint,
+                             primary_hue_r, primary_hue_g, primary_hue_b,
+                             primary_sat_r, primary_sat_g, primary_sat_b,
+                             ) -> np.ndarray:
 
     assert img.dtype == np.uint8 and img.ndim == 3 and img.shape[2] == 3
     h, w, _ = img.shape
@@ -59,9 +68,9 @@ def apply_all_adjustments_c(img: np.ndarray, brightness, contrast, saturation,
     print('----------- lum_arr ------------', lum_arr)
     print('----------- hue_arr ------------', brightness)
 
-    h_arr = (ctypes.c_float * 6)(*hue_arr)
-    s_arr = (ctypes.c_float * 6)(*sat_arr)
-    l_arr = (ctypes.c_float * 6)(*lum_arr)
+    h_arr = (ctypes.c_float * 8)(*hue_arr)
+    s_arr = (ctypes.c_float * 8)(*sat_arr)
+    l_arr = (ctypes.c_float * 8)(*lum_arr)
 
     lib.apply_all_adjustments(
         flat.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
@@ -69,6 +78,10 @@ def apply_all_adjustments_c(img: np.ndarray, brightness, contrast, saturation,
         float(brightness), float(contrast), float(saturation),
         float(shadow), float(highlight),
         float(temperature), float(tint),
-        h_arr, s_arr, l_arr
+        float(dehaze), float(fog),
+        h_arr, s_arr, l_arr,
+        float(shadows_tint),
+        float(primary_hue_r), float(primary_hue_g), float(primary_hue_b),
+        float(primary_sat_r), float(primary_sat_g), float(primary_sat_b),
     )
     return img.copy()

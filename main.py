@@ -28,7 +28,7 @@ from adjustments.camera_calibration import *
 from adjustments_c.brightness_c import apply_all_adjustments_c
 
 from apply_section.apply_adjustments import apply_adjustments
-from apply_section.apply_adjustments_high_res import apply_adjustments_high_res
+# from apply_section.apply_adjustments_high_res import apply_adjustments_high_res
 
 
 from info_windows.window_process import InfoWindow
@@ -65,6 +65,13 @@ class ImageEditorApp(ctk.CTk):
         self.root.bind('<Control-plus>', self.zoom_in)
         self.root.bind('<Control-equal>', self.zoom_in)  # Handle Ctrl + = (some keyboards)
 
+        # Gradient
+        self.start = None
+        self.end = None
+
+        self.root.bind("<Button-1>", self.on_click)
+        self.root.bind("<B1-Motion>", self.on_drag)
+
 
         self.executor = ThreadPoolExecutor(max_workers=1)
 
@@ -73,6 +80,41 @@ class ImageEditorApp(ctk.CTk):
         # self.start_warmup()
         # self.start_init_window(self.run_warmup_and_close_info, "Initializing...")
         # self.start_init("Initializing...")
+
+
+# ---------------------------------------------------------------------------------- #
+# Gradient                                                    #
+# ---------------------------------------------------------------------------------- #
+
+    def on_click(self, event):
+            self.start = (event.x, event.y)
+            self.end = (event.x, event.y)
+
+    def on_drag(self, event):
+        self.end = (event.x, event.y)
+        self.apply_gradient()
+
+    def apply_gradient(self):
+        img = self.small_image.copy()
+        w, h = self.img.size
+        arr = np.asarray(img).astype(np.float32) / 255.0
+
+        x1, y1 = self.start
+        x2, y2 = self.end
+        dx, dy = x2 - x1, y2 - y1
+        length = np.hypot(dx, dy)
+        if length < 1e-5:
+            return
+        nx, ny = dx / length, dy / length
+
+        for y in range(h):
+            for x in range(w):
+                proj = (x - x1) * nx + (y - y1) * ny
+                strength = 1.0 - np.clip(proj / length, 0.0, 1.0)
+
+                arr[y, x] = np.clip(arr[y, x] * (1.0 + 0.5 * strength), 0.0, 1.0)  # brighten
+
+        img = Image.fromarray((arr * 255).astype(np.uint8))
 
 
 # ---------------------------------------------------------------------------------- #
@@ -183,8 +225,8 @@ class ImageEditorApp(ctk.CTk):
         self.shadow_slider = self.create_slider(tone_section, 0.5, 2.0, 1.0, command=None, text="Shadows", tipo='shadows')
         self.light_slider = self.create_slider(tone_section, 0.5, 2.0, 1.0, command=None, text="Lights", tipo='lights')
         self.color_slider = self.create_slider(tone_section, 0.0, 2.0, 1.0, command=None, text="Saturation", tipo='saturation')
-        self.dehaze_slider = self.create_slider(tone_section, -2.0, 2.0, 0.0, command=None, text="Dehaze", tipo='dehaze')
-        self.fog_slider = self.create_slider(tone_section, -2.0, 2.0, 0.0, command=None, text="Fog", tipo='fog')
+        self.dehaze_slider = self.create_slider(tone_section, -1.0, 1.0, 0.0, command=None, text="Dehaze", tipo='dehaze')
+        self.fog_slider = self.create_slider(tone_section, -1.0, 1.0, 0.0, command=None, text="Fog", tipo='fog')
 
 
         # HSL
@@ -225,22 +267,11 @@ class ImageEditorApp(ctk.CTk):
         self.primary_hue_sliders = {}
         self.primary_sat_sliders = {}
 
+        # Shadows Tint
+        self.shadows_tint = self.create_slider(self.calibration_section, -1.0, 1.0, 0.0, command=None, text="Shadows/tint", tipo='shadows_tint')
+
         # Shadows: Red, Green, Blue
         shadow_colors = ["Red", "Green", "Blue"]
-        for color in shadow_colors:
-            self.shadow_hue_sliders[color] = self.create_slider(
-                self.calibration_section, -1.0, 1.0, 0.0,
-                command=None,
-                text=f"Shadows {color} Hue",
-                tipo=f"shadows_hue_adj, {color}"
-            )
-            self.shadow_sat_sliders[color] = self.create_slider(
-                self.calibration_section, 0.0, 2.0, 1.0,
-                # self.calibration_section, -180, 180, 1.0,
-                command=None,
-                text=f"Shadows {color} Saturation",
-                tipo=f"shadows_sat_adj, {color}"
-            )
 
         # RGB Primaries: Red, Green, Blue
         for color in shadow_colors:  # same as RGB
@@ -384,9 +415,6 @@ class ImageEditorApp(ctk.CTk):
         fog = self.fog_slider.get()
 
         # White balance
-        # temperature = int(self.temperature_slider.get())
-        # tint = int(self.tint_slider.get())
-
         temperature = self.get_normalized_temperature()
         tint = self.get_normalized_tint()
 
@@ -399,119 +427,132 @@ class ImageEditorApp(ctk.CTk):
         print('----------- sat_adj ------------', sat_adj)
         print('----------- lum_adj ------------', lum_adj)
 
+        primary_hue = {
+            "Red": self.primary_hue_sliders["Red"].get(),
+            "Green": self.primary_hue_sliders["Green"].get(),
+            "Blue": self.primary_hue_sliders["Blue"].get(),
+        }
+        primary_sat = {
+            "Red": self.primary_sat_sliders["Red"].get(),
+            "Green": self.primary_sat_sliders["Green"].get(),
+            "Blue": self.primary_sat_sliders["Blue"].get(),
+        }
+
+        print(' ----------- primary_hue ------------ ', primary_hue)
+        print(' ----------- primary_sat ------------ ', primary_sat)
+
+
+        shadows_tint = self.shadows_tint.get()
+        print(' ----------- shadows_tint ------------ ', shadows_tint)
+
+
         img = apply_all_adjustments_c(
             img,
             brightness, contrast, saturation,
             shadow_factor, light_factor,
             temperature, tint,
-            # h_arr, s_arr, l_arr
-            [hue_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue"]],
-            [sat_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue"]],
-            [lum_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue"]],
+            dehaze, fog,
+            [hue_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]],
+            [sat_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]],
+            [lum_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]],
+            shadows_tint,
+            primary_hue["Red"], primary_hue["Green"], primary_hue["Blue"],
+            primary_sat["Red"], primary_sat["Green"], primary_sat["Blue"]
         )
+
+
+        # Curve
+        self.curve_base_image = img.copy()
+
+        lut = self.generate_lut()
+
+        b, g, r = cv2.split(img)
+        r = cv2.LUT(r, lut)
+        g = cv2.LUT(g, lut)
+        b = cv2.LUT(b, lut)
+        img = cv2.merge((b, g, r))
 
         self.display_image = img
         self.show_image(self.display_image)
 
 
 
-    # def apply_adjustments(self, tipo, value, high_res=False):
+    def apply_adjustments_high_res(self):
 
-    #     print('----------- tipo ------------', tipo)
-    #     print('----------- value ///// ------------', value)
-    #     img = self.small_image.copy()
+        img = self.original_image.copy()
 
-    #     # Tone
-    #     brightness = self.brightness_slider.get()
-    #     contrast = self.contrast_slider.get()
-    #     shadow_factor = self.shadow_slider.get()
-    #     light_factor = self.light_slider.get()
-    #     saturation = self.color_slider.get()
-    #     dehaze = self.dehaze_slider.get()
-    #     fog = self.fog_slider.get()
+        # Tone
+        brightness = self.brightness_slider.get()
+        contrast = self.contrast_slider.get()
+        shadow_factor = self.shadow_slider.get()
+        light_factor = self.light_slider.get()
+        saturation = self.color_slider.get()
+        dehaze = self.dehaze_slider.get()
+        fog = self.fog_slider.get()
 
-    #     # White balance
-    #     temperature = int(self.temperature_slider.get())
-    #     tint = int(self.tint_slider.get())
-
-    #     img = apply_kelvin_temperature(img, temperature)
-    #     img = apply_tint_shift(img, tint)
-
-    #     # img = apply_brightness(img, brightness)
-    #     img = apply_brightness_c(img, brightness)
-    #     img = apply_contrast(img, contrast)
-    #     img = adjust_saturation_rgb(img, saturation)
-    #     img = adjust_shadows_lights(img, shadow_factor, light_factor)
-    #     img = dehaze_effect(img, dehaze)
-    #     img = fog_effect(img, fog)
-
-    #     hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
-    #     sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
-    #     lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
-
-    #     print(' ----------- hue_adj ------------ ', hue_adj)
-    #     print(' ----------- sat_adj ------------ ', sat_adj)
-    #     print(' ----------- lum_adj ------------ ', lum_adj)
-
-    #     img = apply_hsl_superfast(img, hue_adj, sat_adj, lum_adj)   
-
-    #     primary_hue = {
-    #         "Red": self.primary_hue_sliders["Red"].get(),
-    #         "Green": self.primary_hue_sliders["Green"].get(),
-    #         "Blue": self.primary_hue_sliders["Blue"].get(),
-    #     }
-    #     primary_sat = {
-    #         "Red": self.primary_sat_sliders["Red"].get(),
-    #         "Green": self.primary_sat_sliders["Green"].get(),
-    #         "Blue": self.primary_sat_sliders["Blue"].get(),
-    #     }
-
-    #     print(' ----------- primary_hue ------------ ', primary_hue)
-    #     print(' ----------- primary_sat ------------ ', primary_sat)
-
-    #     img = apply_primary_calibration_rgb(
-    #         img,
-    #         primary_hue["Red"], primary_hue["Green"], primary_hue["Blue"],
-    #         primary_sat["Red"], primary_sat["Green"], primary_sat["Blue"]
-    #     )
-
-    #     shadow_hue = {
-    #         color: self.shadow_hue_sliders[color].get() for color in ["Red", "Green", "Blue"]
-    #     }
-    #     shadow_sat = {
-    #         color: self.shadow_sat_sliders[color].get() for color in ["Red", "Green", "Blue"]
-    #     }
-
-    #     img = apply_shadow_calibration_rgb(
-    #         img,
-    #         shadow_hue['Red'], shadow_hue['Green'], shadow_hue['Blue'],
-    #         shadow_sat['Red'], shadow_sat['Green'], shadow_sat['Blue']
-    #     )
+        # White balance
+        temperature = self.get_normalized_temperature()
+        tint = self.get_normalized_tint()
 
 
-    #     # # Eyedropper
-    #     # if hasattr(self, 'eyedropper_pixel') and self.eyedropper_pixel is not None:
-    #     #     img = apply_white_balance_eyedropper(img, self.eyedropper_pixel)
+        hue_adj = {color: slider.get() for color, slider in self.hue_sliders.items()}
+        sat_adj = {color: slider.get() for color, slider in self.sat_sliders.items()}
+        lum_adj = {color: slider.get() for color, slider in self.lum_sliders.items()}
+
+        print('----------- hue_adj ------------', hue_adj)
+        print('----------- sat_adj ------------', sat_adj)
+        print('----------- lum_adj ------------', lum_adj)
+
+        primary_hue = {
+            "Red": self.primary_hue_sliders["Red"].get(),
+            "Green": self.primary_hue_sliders["Green"].get(),
+            "Blue": self.primary_hue_sliders["Blue"].get(),
+        }
+        primary_sat = {
+            "Red": self.primary_sat_sliders["Red"].get(),
+            "Green": self.primary_sat_sliders["Green"].get(),
+            "Blue": self.primary_sat_sliders["Blue"].get(),
+        }
+
+        print(' ----------- primary_hue ------------ ', primary_hue)
+        print(' ----------- primary_sat ------------ ', primary_sat)
 
 
-    #     # Curve
-    #     self.curve_base_image = img.copy()
-
-    #     lut = self.generate_lut()
-
-    #     b, g, r = cv2.split(img)
-    #     r = cv2.LUT(r, lut)
-    #     g = cv2.LUT(g, lut)
-    #     b = cv2.LUT(b, lut)
-    #     img = cv2.merge((b, g, r))
+        shadows_tint = self.shadows_tint.get()
+        print(' ----------- shadows_tint ------------ ', shadows_tint)
 
 
-    #     self.display_image = img
-    #     self.show_image(self.display_image)
+        img = apply_all_adjustments_c(
+            img,
+            brightness, contrast, saturation,
+            shadow_factor, light_factor,
+            temperature, tint,
+            dehaze, fog,
+            [hue_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]],
+            [sat_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]],
+            [lum_adj[color] for color in ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"]],
+            shadows_tint,
+            primary_hue["Red"], primary_hue["Green"], primary_hue["Blue"],
+            primary_sat["Red"], primary_sat["Green"], primary_sat["Blue"]
+        )
+
+
+        # Curve
+        self.curve_base_image = img.copy()
+
+        lut = self.generate_lut()
+
+        b, g, r = cv2.split(img)
+        r = cv2.LUT(r, lut)
+        g = cv2.LUT(g, lut)
+        b = cv2.LUT(b, lut)
+        img = cv2.merge((b, g, r))
+
+        return img
 
 
 
-
+   
     def show_image(self, img):
         if not hasattr(self, "zoom_level"):
             self.zoom_level = 1.0
@@ -635,32 +676,33 @@ class ImageEditorApp(ctk.CTk):
     def save_high_res_image_pil(self):
         
         try:
-            res = apply_adjustments_high_res(
-                self.original_image.copy(),
+            res = self.apply_adjustments_high_res(
+                # self.original_image.copy(),
                 
-                # Tone
-                self.brightness_slider.get(),
-                self.contrast_slider.get(),
-                self.shadow_slider.get(),
-                self.light_slider.get(),
-                self.color_slider.get(),
-                self.dehaze_slider.get(),
-                self.fog_slider.get(),
+                # # Tone
+                # self.brightness_slider.get(),
+                # self.contrast_slider.get(),
+                # self.shadow_slider.get(),
+                # self.light_slider.get(),
+                # self.color_slider.get(),
+                # self.dehaze_slider.get(),
+                # self.fog_slider.get(),
 
-                # White balance
-                int(self.temperature_slider.get()),
-                int(self.tint_slider.get()),
+                # # White balance
+                # int(self.temperature_slider.get()),
+                # int(self.tint_slider.get()),
 
-                self.hue_sliders,
-                self.sat_sliders,
-                self.lum_sliders,
+                # self.hue_sliders,
+                # self.sat_sliders,
+                # self.lum_sliders,
 
-                self.shadow_hue_sliders,
-                self.shadow_sat_sliders,
-                self.primary_hue_sliders,
-                self.primary_sat_sliders,
+                # # self.shadow_hue_sliders,
+                # # self.shadow_sat_sliders,
+                # self.shadows_tint.get(),
+                # self.primary_hue_sliders,
+                # self.primary_sat_sliders,
 
-                self.generate_lut()
+                # self.generate_lut()
 
             )
 
