@@ -38,6 +38,32 @@ from zoom.zoom import Zoom
 # Theme
 ctk.set_appearance_mode("Dark")
 
+class Gradient:
+    def __init__(self, canvas, start, end, settings=None):
+        self.canvas = canvas
+        self.start = start
+        self.end = end
+        self.settings = settings or {
+            'exposure': 0.0,
+            'contrast': 0.0,
+            'temperature': 0.0,
+            'tint': 0.0,
+            'saturation': 0.0,
+            'strength': 1.0
+        }
+        self.line = canvas.create_line(*start, *end, fill='red', width=2, tags='gradient')
+
+    def update_line(self):
+        self.canvas.coords(self.line, *self.start, *self.end)
+
+    def set_end(self, end):
+        self.end = end
+        self.update_line()
+
+    def set_start(self, start):
+        self.start = start
+        self.update_line()
+
 
 class ImageEditorApp(ctk.CTk):
     def __init__(self):
@@ -49,6 +75,9 @@ class ImageEditorApp(ctk.CTk):
         self.title("Image Editor")
         self.geometry("1000x600")
         self.configure(bg="#212121")  # Set background color
+
+        self.panel = ctk.CTkFrame(self, width=200)
+        self.panel.pack(side="left", fill="y", padx=10, pady=10)
 
         # Image variables
         self.original_image = None
@@ -66,11 +95,24 @@ class ImageEditorApp(ctk.CTk):
         self.root.bind('<Control-equal>', self.zoom_in)  # Handle Ctrl + = (some keyboards)
 
         # Gradient
-        self.start = None
-        self.end = None
+        self.start_pos = None
+        self.end_pos = None
+        # self.root.bind("<ButtonPress-1>", self.on_mouse_down)
+        # self.root.bind("<B1-Motion>", self.on_mouse_drag)
+        # self.root.bind("<ButtonRelease-1>", self.on_mouse_up)
 
-        self.root.bind("<Button-1>", self.on_click)
-        self.root.bind("<B1-Motion>", self.on_drag)
+        self.root.bind("<Button-1>", self.on_mouse_down)                 # Left click
+        self.root.bind("<Double-Button-1>", self.on_mouse_double_click)
+        self.root.bind("<B1-Motion>", self.on_mouse_drag)                # Drag with button 1
+        self.root.bind("<ButtonRelease-1>", self.on_mouse_up)            # Release
+
+        # self.label.bind("<Control-Button-1>", self.on_ctrl_mouse_down)    # Ctrl + Left click
+        # self.label.bind("<Control-B1-Motion>", self.on_ctrl_mouse_drag)   # Ctrl + drag
+        # self.label.bind("<Control-ButtonRelease-1>", self.on_ctrl_mouse_up)  # Ctrl + release
+
+
+        # self._create_sliders()
+        # End of Gradient
 
 
         self.executor = ThreadPoolExecutor(max_workers=1)
@@ -86,35 +128,85 @@ class ImageEditorApp(ctk.CTk):
 # Gradient                                                    #
 # ---------------------------------------------------------------------------------- #
 
-    def on_click(self, event):
-            self.start = (event.x, event.y)
-            self.end = (event.x, event.y)
+    def _create_sliders(self):
+        self.sliders = {}
+        for name in ['exposure', 'contrast', 'temperature', 'tint', 'saturation', 'strength']:
+            label = ctk.CTkLabel(self.panel, text=name.title())
+            label.pack(pady=(5, 0), anchor='w')  # nice spacing and left alignment
 
-    def on_drag(self, event):
-        self.end = (event.x, event.y)
-        self.apply_gradient()
+            var = ctk.DoubleVar()
+            slider = ctk.CTkSlider(
+                self.panel,
+                from_=-1.0 if name != 'strength' else 0.0,
+                to=1.0,
+                variable=var,
+                command=lambda v, n=name: self.update_current_setting(n, float(v))
+            )
+            slider.set(0.0 if name != 'strength' else 1.0)
+            slider.pack(fill='x', padx=10, pady=(0, 10))
+            self.sliders[name] = (slider, var)
 
-    def apply_gradient(self):
-        img = self.small_image.copy()
-        w, h = self.img.size
-        arr = np.asarray(img).astype(np.float32) / 255.0
+    def on_mouse_down(self, event):
+        print(' --------------------- on_mouse_down --------------------- ')
+        # self.start_pos = (event.x, event.y)
 
-        x1, y1 = self.start
-        x2, y2 = self.end
-        dx, dy = x2 - x1, y2 - y1
-        length = np.hypot(dx, dy)
-        if length < 1e-5:
+    def on_mouse_double_click(self, event):
+        print(' --------------------- on_mouse_double_click --------------------- ')
+        self.start_pos = (event.x, event.y)
+
+    def on_mouse_drag(self, event):
+        print(' --------------------- on_mouse_drag --------------------- ')
+        # Optional: show a preview box using overlay if needed
+        pass  # Skip if not using live overlay
+
+    def on_mouse_up(self, event):
+        print(' --------------------- on_mouse_up --------------------- ')
+        self.end_pos = (event.x, event.y)
+        self.apply_gradient_to_selection()
+
+
+    def apply_gradient_to_selection(self):
+        if not self.start_pos or not self.end_pos:
             return
-        nx, ny = dx / length, dy / length
 
-        for y in range(h):
-            for x in range(w):
-                proj = (x - x1) * nx + (y - y1) * ny
-                strength = 1.0 - np.clip(proj / length, 0.0, 1.0)
+        x0, y0 = self.start_pos
+        x1, y1 = self.end_pos
 
-                arr[y, x] = np.clip(arr[y, x] * (1.0 + 0.5 * strength), 0.0, 1.0)  # brighten
+        x0, x1 = sorted([x0, x1])
+        y0, y1 = sorted([y0, y1])
 
-        img = Image.fromarray((arr * 255).astype(np.uint8))
+        print(' --------------------- x0, x1 --------------------- ', x0, x1)
+        print(' --------------------- y0, y1 --------------------- ', y0, y1)
+
+        img = self.small_image.copy()
+        h, w = y1 - y0, x1 - x0
+
+        if h == 0 or w == 0:
+            return  # Avoid empty selection
+
+        # ---------- Draw Lines ----------
+        # Line 1: top of gradient
+        cv2.line(img, (x0, y0), (x1, y0), (255, 0, 0), 1)
+        # Line 2: bottom of gradient
+        cv2.line(img, (x0, y1), (x1, y1), (255, 0, 0), 1)
+
+        alpha = np.linspace(1.0, 0.0, h).reshape(-1, 1)  # vertical gradient
+
+        # Apply gradient to selected area
+        for c in range(3):  # R, G, B
+            img[y0:y1, x0:x1, c] = img[y0:y1, x0:x1, c] * alpha
+
+        self.display_image = img
+        self.show_image(self.display_image)
+        # self.update_display_image()
+
+    def update_display_image(self):
+        print(' --------------------- update_display_image --------------------- ')
+        image = Image.fromarray(self.display_image.astype(np.uint8))
+        self.tk_img = ImageTk.PhotoImage(image)
+        self.root.configure(image=self.tk_img)
+        self.root.image = self.tk_img
+
 
 
 # ---------------------------------------------------------------------------------- #
@@ -290,7 +382,8 @@ class ImageEditorApp(ctk.CTk):
                 tipo=f"primary_sat_adj, {color}"
             )
 
-
+        # gradient = ctk.CTkButton(controls, text="Gradient", command=self.start_gradient)
+        # gradient.pack(pady=10)
 
 
         reset_btn = ctk.CTkButton(controls, text="Reset", command=self.reset_sliders)
@@ -299,8 +392,6 @@ class ImageEditorApp(ctk.CTk):
         save_image_btn = ctk.CTkButton(controls, text="Save as...", command=lambda: self.start_process(self.save_high_res_image_pil, "Saving..."))
         save_image_btn.pack(pady=10)
     
-
-
 
     def toggle_section(self, frame):
         if frame.winfo_viewable():
