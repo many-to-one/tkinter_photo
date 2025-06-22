@@ -25,6 +25,8 @@ from adjustments.hsl import *
 from adjustments.tiles import *
 from adjustments.camera_calibration import *
 
+from local_adjustments.gradient import *
+
 from adjustments_c.brightness_c import apply_all_adjustments_c
 
 from apply_section.apply_adjustments import apply_adjustments
@@ -38,31 +40,31 @@ from zoom.zoom import Zoom
 # Theme
 ctk.set_appearance_mode("Dark")
 
-class Gradient:
-    def __init__(self, canvas, start, end, settings=None):
-        self.canvas = canvas
-        self.start = start
-        self.end = end
-        self.settings = settings or {
-            'exposure': 0.0,
-            'contrast': 0.0,
-            'temperature': 0.0,
-            'tint': 0.0,
-            'saturation': 0.0,
-            'strength': 1.0
-        }
-        self.line = canvas.create_line(*start, *end, fill='red', width=2, tags='gradient')
+# class Gradient:
+#     def __init__(self, canvas, start, end, settings=None):
+#         self.canvas = canvas
+#         self.start = start
+#         self.end = end
+#         self.settings = settings or {
+#             'exposure': 0.0,
+#             'contrast': 0.0,
+#             'temperature': 0.0,
+#             'tint': 0.0,
+#             'saturation': 0.0,
+#             'strength': 1.0
+#         }
+#         self.line = canvas.create_line(*start, *end, fill='red', width=2, tags='gradient')
 
-    def update_line(self):
-        self.canvas.coords(self.line, *self.start, *self.end)
+#     def update_line(self):
+#         self.canvas.coords(self.line, *self.start, *self.end)
 
-    def set_end(self, end):
-        self.end = end
-        self.update_line()
+#     def set_end(self, end):
+#         self.end = end
+#         self.update_line()
 
-    def set_start(self, start):
-        self.start = start
-        self.update_line()
+#     def set_start(self, start):
+#         self.start = start
+#         self.update_line()
 
 
 class ImageEditorApp(ctk.CTk):
@@ -81,6 +83,7 @@ class ImageEditorApp(ctk.CTk):
 
         # Image variables
         self.original_image = None
+        self.small_image = None
         self.curve_base_image = None
         self.display_image = None
         self.high_res_result = None
@@ -95,11 +98,14 @@ class ImageEditorApp(ctk.CTk):
         self.root.bind('<Control-equal>', self.zoom_in)  # Handle Ctrl + = (some keyboards)
 
         # Gradient
+        self.gradients = []
         self.start_pos = None
         self.end_pos = None
-        # self.root.bind("<ButtonPress-1>", self.on_mouse_down)
-        # self.root.bind("<B1-Motion>", self.on_mouse_drag)
-        # self.root.bind("<ButtonRelease-1>", self.on_mouse_up)
+        self.drag_mode = None  # "move", "resize_top", "resize_bottom"
+        self.selected_gradient_index = None
+
+        self.root.bind("<Button-3>", self.delete_gradient)  # Right click
+
 
         self.root.bind("<Button-1>", self.on_mouse_down)                 # Left click
         self.root.bind("<Double-Button-1>", self.on_mouse_double_click)
@@ -146,66 +152,105 @@ class ImageEditorApp(ctk.CTk):
             slider.pack(fill='x', padx=10, pady=(0, 10))
             self.sliders[name] = (slider, var)
 
-    def on_mouse_down(self, event):
-        print(' --------------------- on_mouse_down --------------------- ')
-        # self.start_pos = (event.x, event.y)
+    def add_gradient(self):
+        self.gradients.append({"start": (0, 100), "end": (2000, 300), "angle": 0.0, "effects": {...}})
+        self.apply_gradients_to_selection()
 
-    def on_mouse_double_click(self, event):
-        print(' --------------------- on_mouse_double_click --------------------- ')
-        self.start_pos = (event.x, event.y)
+    def on_mouse_down(self, event):
+        x, y = event.x * 2, event.y * 2  # scale to match small_image size
+
+        for i, g in enumerate(self.gradients):
+            x0, y0 = g["start"]
+            x1, y1 = g["end"]
+
+            x0, x1 = sorted([x0, x1])
+            y0, y1 = sorted([y0, y1])
+
+            # Check if near top line
+            if abs(y - y0) < 10 and x0 <= x <= x1:
+                self.drag_mode = "resize_top"
+                self.selected_gradient_index = i
+                break
+            # Near bottom line
+            elif abs(y - y1) < 10 and x0 <= x <= x1:
+                self.drag_mode = "resize_bottom"
+                self.selected_gradient_index = i
+                break
+            # Inside box = move
+            elif y0 < y < y1 and x0 <= x <= x1:
+                self.drag_mode = "move"
+                self.selected_gradient_index = i
+                self.last_mouse_y = y
+                break
 
     def on_mouse_drag(self, event):
-        print(' --------------------- on_mouse_drag --------------------- ')
-        # Optional: show a preview box using overlay if needed
-        pass  # Skip if not using live overlay
-
-    def on_mouse_up(self, event):
-        print(' --------------------- on_mouse_up --------------------- ')
-        self.end_pos = (event.x, event.y)
-        self.apply_gradient_to_selection()
-
-
-    def apply_gradient_to_selection(self):
-        if not self.start_pos or not self.end_pos:
+        if self.selected_gradient_index is None:
             return
 
-        x0, y0 = self.start_pos
-        x1, y1 = self.end_pos
+        x, y = event.x * 2, event.y * 2
+        g = self.gradients[self.selected_gradient_index]
 
+        x0, y0 = g["start"]
+        x1, y1 = g["end"]
         x0, x1 = sorted([x0, x1])
         y0, y1 = sorted([y0, y1])
 
-        print(' --------------------- x0, x1 --------------------- ', x0, x1)
-        print(' --------------------- y0, y1 --------------------- ', y0, y1)
+        if self.drag_mode == "resize_top":
+            self.gradients[self.selected_gradient_index]["start"] = (x0, y)
+        elif self.drag_mode == "resize_bottom":
+            self.gradients[self.selected_gradient_index]["end"] = (x1, y)
+        elif self.drag_mode == "move":
+            dy = y - self.last_mouse_y
+            self.gradients[self.selected_gradient_index]["start"] = (x0, y0 + dy)
+            self.gradients[self.selected_gradient_index]["end"] = (x1, y1 + dy)
+            self.last_mouse_y = y
 
-        img = self.small_image.copy()
-        h, w = y1 - y0, x1 - x0
+        self.apply_gradients_to_selection()
 
-        if h == 0 or w == 0:
-            return  # Avoid empty selection
+    def on_mouse_up(self, event):
+        self.drag_mode = None
+        self.selected_gradient_index = None
 
-        # ---------- Draw Lines ----------
-        # Line 1: top of gradient
-        cv2.line(img, (x0, y0), (x1, y0), (255, 0, 0), 1)
-        # Line 2: bottom of gradient
-        cv2.line(img, (x0, y1), (x1, y1), (255, 0, 0), 1)
 
-        alpha = np.linspace(1.0, 0.0, h).reshape(-1, 1)  # vertical gradient
+    def on_mouse_double_click(self, event):
+        print(' --------------------- on_mouse_double_click --------------------- ')
 
-        # Apply gradient to selected area
-        for c in range(3):  # R, G, B
-            img[y0:y1, x0:x1, c] = img[y0:y1, x0:x1, c] * alpha
+    def delete_gradient(self, event):
+        x, y = event.x * 2, event.y * 2
+
+        for i, g in enumerate(self.gradients):
+            x0, y0 = g["start"]
+            x1, y1 = g["end"]
+
+            x0, x1 = sorted([x0, x1])
+            y0, y1 = sorted([y0, y1])
+
+            print(' --------------------- delete_gradient x, y --------------------- ', x, y, i)
+            print(' --------------------- delete_gradient x0, y0 --------------------- ', x0, y0)
+            print(' --------------------- delete_gradient x1, y1 --------------------- ', x1, y1)
+
+            if x0 <= x <= x1 and y0 <= y <= y1:
+                del self.gradients[i]
+                self.apply_gradients_to_selection()
+                break
+
+
+
+    def apply_gradients_to_selection(self):
+        if not self.gradients:
+            return
+
+        # if self.small_image.copy():
+        img = apply_gradients(
+            self.small_image.copy(),
+            self.gradients
+        )
+
+
 
         self.display_image = img
         self.show_image(self.display_image)
-        # self.update_display_image()
 
-    def update_display_image(self):
-        print(' --------------------- update_display_image --------------------- ')
-        image = Image.fromarray(self.display_image.astype(np.uint8))
-        self.tk_img = ImageTk.PhotoImage(image)
-        self.root.configure(image=self.tk_img)
-        self.root.image = self.tk_img
 
 
 
@@ -279,11 +324,11 @@ class ImageEditorApp(ctk.CTk):
         self.image_panel.bind("<Button-4>", self.on_mousewheel)    # Linux
         self.image_panel.bind("<Button-5>", self.on_mousewheel)
 
-        controls_scroll = ctk.CTkScrollableFrame(self, width=300, fg_color="#212121")
-        controls_scroll.pack(side="right", fill="y")
+        controls = ctk.CTkScrollableFrame(self, width=300, fg_color="#212121")
+        controls.pack(side="right", fill="y")
 
         # Use this as the parent for accordion sections
-        controls = controls_scroll
+        #controls = controls_scroll
 
         open_btn = ctk.CTkButton(controls, text="Open Image", command=self.open_image)
         open_btn.pack(pady=10)
@@ -303,6 +348,20 @@ class ImageEditorApp(ctk.CTk):
 
         reset_curve_btn = ctk.CTkButton(controls, text="Reset Curve", command=self.reset_curve)
         reset_curve_btn.pack(pady=10)
+
+
+        # --- Create horizontal container frame ---
+        la_cont = ctk.CTkFrame(controls, height=30) 
+        la_cont.pack(pady=5, padx=5, fill="x")
+
+        btn = ctk.CTkButton(la_cont, text=f"Gr", width=40, command=self.add_gradient)
+        btn.pack(side="left", padx=10)
+
+        btn = ctk.CTkButton(la_cont, text=f"Br", width=40)
+        btn.pack(side="left", padx=10)
+
+        btn = ctk.CTkButton(la_cont, text=f"Cl", width=40)
+        btn.pack(side="left", padx=10)
 
 
         # White balance accordion section
