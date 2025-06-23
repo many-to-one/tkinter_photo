@@ -1,4 +1,5 @@
 import customtkinter as ctk
+import tkinter as tk
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -11,6 +12,7 @@ class InfoWindow(ctk.CTkToplevel):
         self.geometry("300x100")
         self.grab_set()  # Block interaction with main window
         self.resizable(False, False)
+        self.answer = tk.BooleanVar(value=False)
 
         # Get screen width and height from parent
         screen_width = parent.winfo_screenwidth()
@@ -29,8 +31,25 @@ class InfoWindow(ctk.CTkToplevel):
         label = ctk.CTkLabel(self, text=text, font=ctk.CTkFont(size=14), text_color="white")
         label.pack(expand=True, fill="both", padx=10, pady=10)
 
+        cont = ctk.CTkFrame(self, height=30) 
+        cont.pack(pady=5, padx=5, fill="x")
 
-    # def close_info_window(self):
-    #     """Close the info window when saving is complete."""
-    #     if hasattr(self, "info_window"):
-    #         self.info_window.destroy()
+        # Inner frame to center buttons
+        btn_frame = ctk.CTkFrame(cont)
+        btn_frame.pack(anchor="center")
+
+        btn = ctk.CTkButton(btn_frame, text=f"Yes", width=60, command=lambda: self.close_info_window(True))
+        btn.pack(side="left", padx=10)
+
+        btn = ctk.CTkButton(btn_frame, text=f"No", width=60, command=lambda: self.close_info_window(False))
+        btn.pack(side="right", padx=10)
+
+    def get_answer(self):
+        self.wait_window()
+        return self.answer.get()
+
+
+    def close_info_window(self, value):
+        """Close the info window when saving is complete."""
+        self.answer.set(value)
+        self.destroy()

@@ -155,6 +155,7 @@ class ImageEditorApp(ctk.CTk):
     def add_gradient(self):
         self.gradients.append({"start": (0, 100), "end": (2000, 300), "angle": 0.0, "effects": {...}})
         self.apply_gradients_to_selection()
+        print(' --------------------- add_gradient ------------------', self.gradients)
 
     def on_mouse_down(self, event):
         x, y = event.x * 2, event.y * 2  # scale to match small_image size
@@ -216,31 +217,36 @@ class ImageEditorApp(ctk.CTk):
         print(' --------------------- on_mouse_double_click --------------------- ')
 
     def delete_gradient(self, event):
-        x, y = event.x * 2, event.y * 2
 
-        for i, g in enumerate(self.gradients):
-            x0, y0 = g["start"]
-            x1, y1 = g["end"]
+        confirm = InfoWindow(self, 'Delete ?')
+        answer = confirm.get_answer()
+        print(' --------------------- answer --------------------- ', answer)
 
-            x0, x1 = sorted([x0, x1])
-            y0, y1 = sorted([y0, y1])
+        if answer == False:
+            return
+        else:
+            x, y = event.x * 2, event.y * 2
 
-            print(' --------------------- delete_gradient x, y --------------------- ', x, y, i)
-            print(' --------------------- delete_gradient x0, y0 --------------------- ', x0, y0)
-            print(' --------------------- delete_gradient x1, y1 --------------------- ', x1, y1)
+            for i, g in enumerate(self.gradients):
+                x0, y0 = g["start"]
+                x1, y1 = g["end"]
 
-            if x0 <= x <= x1 and y0 <= y <= y1:
-                del self.gradients[i]
-                self.apply_gradients_to_selection()
-                break
+                x0, x1 = sorted([x0, x1])
+                y0, y1 = sorted([y0, y1])
+
+                print(' --------------------- delete_gradient x, y --------------------- ', x, y, i)
+                print(' --------------------- delete_gradient x0, y0 --------------------- ', x0, y0)
+                print(' --------------------- delete_gradient x1, y1 --------------------- ', x1, y1)
+
+                if x0 <= x <= x1 and y0 <= y <= y1:
+                    del self.gradients[i]
+                    self.apply_gradients_to_selection()
+                    break
 
 
 
     def apply_gradients_to_selection(self):
-        if not self.gradients:
-            return
 
-        # if self.small_image.copy():
         img = apply_gradients(
             self.small_image.copy(),
             self.gradients

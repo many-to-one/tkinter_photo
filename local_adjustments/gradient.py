@@ -3,6 +3,8 @@ import numpy as np
 
 def apply_gradients(img, gradients):
 
+    print(' --------------------- gradients --------------------- ', gradients)
+
     for g in gradients:
         if not g["start"] or not g["end"]:
             continue
