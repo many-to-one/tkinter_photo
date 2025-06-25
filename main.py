@@ -3,7 +3,8 @@ import tkinter as tk
 from tkinter import filedialog
 import cv2
 import numpy as np
-from PIL import Image, ImageTk, ImageEnhance
+from PIL import Image, ImageTk, ImageEnhance, ImageDraw
+import math
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -111,6 +112,8 @@ class ImageEditorApp(ctk.CTk):
         self.root.bind("<Double-Button-1>", self.on_mouse_double_click)
         self.root.bind("<B1-Motion>", self.on_mouse_drag)                # Drag with button 1
         self.root.bind("<ButtonRelease-1>", self.on_mouse_up)            # Release
+        self.root.bind("<Motion>", self.on_mouse_move)
+
 
         # self.label.bind("<Control-Button-1>", self.on_ctrl_mouse_down)    # Ctrl + Left click
         # self.label.bind("<Control-B1-Motion>", self.on_ctrl_mouse_drag)   # Ctrl + drag
@@ -153,12 +156,29 @@ class ImageEditorApp(ctk.CTk):
             self.sliders[name] = (slider, var)
 
     def add_gradient(self):
-        self.gradients.append({"start": (0, 100), "end": (2000, 300), "angle": 0.0, "effects": {...}})
+        start = (0, 100)
+        end = (2000, 300)
+        angle = 0.0
+        cx = (start[0] + end[0]) // 2
+        cy = (start[1] + end[1]) // 2
+        handle = self.calculate_rotation_handle(cx, cy, angle)
+
+        self.gradients.append({
+            "start": start,
+            "end": end,
+            "angle": angle,
+            "handle": handle,
+            "effects": {...}
+        })
+
         self.apply_gradients_to_selection()
+
         print(' --------------------- add_gradient ------------------', self.gradients)
 
     def on_mouse_down(self, event):
         x, y = event.x * 2, event.y * 2  # scale to match small_image size
+        clicked_x, clicked_y = event.x, event.y
+        self.draw = ImageDraw.Draw(self.small_image)
 
         for i, g in enumerate(self.gradients):
             x0, y0 = g["start"]
@@ -166,6 +186,11 @@ class ImageEditorApp(ctk.CTk):
 
             x0, x1 = sorted([x0, x1])
             y0, y1 = sorted([y0, y1])
+
+            # rotation
+            self.draw.rectangle([x0, y0, x1, y1], outline="green", width=5)
+            hx, hy = g["handle"] 
+            self.draw.ellipse((hx - 10, hy - 10, hx + 10, hy + 10), fill="green", outline="black", width=2)
 
             # Check if near top line
             if abs(y - y0) < 10 and x0 <= x <= x1:
@@ -182,6 +207,11 @@ class ImageEditorApp(ctk.CTk):
                 self.drag_mode = "move"
                 self.selected_gradient_index = i
                 self.last_mouse_y = y
+                break
+            # rotation
+            elif abs(x - hx) < 20 and abs(y - hy) < 20:
+                self.drag_mode = "rotate"
+                self.selected_gradient_index = i
                 break
 
     def on_mouse_drag(self, event):
@@ -205,12 +235,38 @@ class ImageEditorApp(ctk.CTk):
             self.gradients[self.selected_gradient_index]["start"] = (x0, y0 + dy)
             self.gradients[self.selected_gradient_index]["end"] = (x1, y1 + dy)
             self.last_mouse_y = y
+        elif self.drag_mode == "move":
+            dy = y - self.last_mouse_y
+            new_start = (x0, y0 + dy)
+            new_end = (x1, y1 + dy)
+            self.gradients[self.selected_gradient_index]["start"] = new_start
+            self.gradients[self.selected_gradient_index]["end"] = new_end
+            self.last_mouse_y = y
+
+            # Recalculate handle position
+            cx = (new_start[0] + new_end[0]) // 2
+            cy = (new_start[1] + new_end[1]) // 2
+            angle = self.gradients[self.selected_gradient_index]["angle"]
+            self.gradients[self.selected_gradient_index]["handle"] = self.calculate_rotation_handle(cx, cy, angle)
+
+
 
         self.apply_gradients_to_selection()
 
     def on_mouse_up(self, event):
         self.drag_mode = None
         self.selected_gradient_index = None
+
+    
+    def on_mouse_move(self, event):
+        x, y = event.x * 2, event.y * 2
+        for g in self.gradients:
+            hx, hy = g["handle"]
+            if abs(x - hx) < 20 and abs(y - hy) < 20:
+                self.config(cursor="exchange")  # or "circle", or a custom cursor
+                return
+        self.config(cursor="arrow")
+
 
 
     def on_mouse_double_click(self, event):
@@ -242,6 +298,14 @@ class ImageEditorApp(ctk.CTk):
                     del self.gradients[i]
                     self.apply_gradients_to_selection()
                     break
+
+    
+    def calculate_rotation_handle(self, cx, cy, angle_deg, offset=50):
+        angle_rad = math.radians(angle_deg)
+        hx = int(cx + offset * math.cos(angle_rad - math.pi / 2))  # above center
+        hy = int(cy + offset * math.sin(angle_rad - math.pi / 2))
+        return (hx, hy)
+
 
 
 

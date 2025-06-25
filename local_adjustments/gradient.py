@@ -11,6 +11,7 @@ def apply_gradients(img, gradients):
 
         x0, y0 = g["start"]
         x1, y1 = g["end"]
+        # angle = g.get("angle", 0.0)
 
         # Scale to original resolution if needed
         x0, x1 = sorted([int(x0), int(x1)])
@@ -25,6 +26,8 @@ def apply_gradients(img, gradients):
         # Draw gradient lines
         cv2.line(img, (x0, y0), (x1, y0), (255, 0, 0), 1)
         cv2.line(img, (x0, y1), (x1, y1), (255, 0, 0), 1)
+        cv2.circle(img, g["handle"], 6, (0, 255, 0), -1)
+
 
         # Vertical gradient
         alpha = np.linspace(1.0, 0.0, h).reshape(-1, 1)
