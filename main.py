@@ -41,32 +41,6 @@ from zoom.zoom import Zoom
 # Theme
 ctk.set_appearance_mode("Dark")
 
-# class Gradient:
-#     def __init__(self, canvas, start, end, settings=None):
-#         self.canvas = canvas
-#         self.start = start
-#         self.end = end
-#         self.settings = settings or {
-#             'exposure': 0.0,
-#             'contrast': 0.0,
-#             'temperature': 0.0,
-#             'tint': 0.0,
-#             'saturation': 0.0,
-#             'strength': 1.0
-#         }
-#         self.line = canvas.create_line(*start, *end, fill='red', width=2, tags='gradient')
-
-#     def update_line(self):
-#         self.canvas.coords(self.line, *self.start, *self.end)
-
-#     def set_end(self, end):
-#         self.end = end
-#         self.update_line()
-
-#     def set_start(self, start):
-#         self.start = start
-#         self.update_line()
-
 
 class ImageEditorApp(ctk.CTk):
     def __init__(self):
@@ -99,26 +73,21 @@ class ImageEditorApp(ctk.CTk):
         self.root.bind('<Control-equal>', self.zoom_in)  # Handle Ctrl + = (some keyboards)
 
         # Gradient
+        self.gradients_controller = GradientController(self)
         self.gradients = []
         self.start_pos = None
         self.end_pos = None
         self.drag_mode = None  # "move", "resize_top", "resize_bottom"
         self.selected_gradient_index = None
 
-        self.root.bind("<Button-3>", self.delete_gradient)  # Right click
+        self.root.bind("<Button-3>", self.gradients_controller.delete_gradient)  # Right click
 
 
-        self.root.bind("<Button-1>", self.on_mouse_down)                 # Left click
-        self.root.bind("<Double-Button-1>", self.on_mouse_double_click)
-        self.root.bind("<B1-Motion>", self.on_mouse_drag)                # Drag with button 1
-        self.root.bind("<ButtonRelease-1>", self.on_mouse_up)            # Release
-        self.root.bind("<Motion>", self.on_mouse_move)
-
-
-        # self.label.bind("<Control-Button-1>", self.on_ctrl_mouse_down)    # Ctrl + Left click
-        # self.label.bind("<Control-B1-Motion>", self.on_ctrl_mouse_drag)   # Ctrl + drag
-        # self.label.bind("<Control-ButtonRelease-1>", self.on_ctrl_mouse_up)  # Ctrl + release
-
+        self.root.bind("<Button-1>", self.gradients_controller.on_mouse_down)                 # Left click
+        self.root.bind("<Double-Button-1>", self.gradients_controller.on_mouse_double_click)
+        self.root.bind("<B1-Motion>", self.gradients_controller.on_mouse_drag)                # Drag with button 1
+        self.root.bind("<ButtonRelease-1>", self.gradients_controller.on_mouse_up)            # Release
+        self.root.bind("<Motion>", self.gradients_controller.on_mouse_move)
 
         # self._create_sliders()
         # End of Gradient
@@ -161,7 +130,7 @@ class ImageEditorApp(ctk.CTk):
         angle = 0.0
         cx = (start[0] + end[0]) // 2
         cy = (start[1] + end[1]) // 2
-        handle = self.calculate_rotation_handle(cx, cy, angle)
+        handle = self.gradients_controller.calculate_rotation_handle(cx, cy, angle)
 
         self.gradients.append({
             "start": start,
@@ -175,143 +144,149 @@ class ImageEditorApp(ctk.CTk):
 
         print(' --------------------- add_gradient ------------------', self.gradients)
 
-    def on_mouse_down(self, event):
-        x, y = event.x * 2, event.y * 2  # scale to match small_image size
-        clicked_x, clicked_y = event.x, event.y
-        self.draw = ImageDraw.Draw(self.small_image)
+    # def on_mouse_down(self, event):
+    #     x, y = event.x * 2, event.y * 2  # scale to match small_image size
+    #     clicked_x, clicked_y = event.x, event.y
 
-        for i, g in enumerate(self.gradients):
-            x0, y0 = g["start"]
-            x1, y1 = g["end"]
+    #     for i, g in enumerate(self.gradients):
+    #         x0, y0 = g["start"]
+    #         x1, y1 = g["end"]
 
-            x0, x1 = sorted([x0, x1])
-            y0, y1 = sorted([y0, y1])
+    #         x0, x1 = sorted([x0, x1])
+    #         y0, y1 = sorted([y0, y1])
 
-            # rotation
-            self.draw.rectangle([x0, y0, x1, y1], outline="green", width=5)
-            hx, hy = g["handle"] 
-            self.draw.ellipse((hx - 10, hy - 10, hx + 10, hy + 10), fill="green", outline="black", width=2)
+    #         hx, hy = g["handle"]
 
-            # Check if near top line
-            if abs(y - y0) < 10 and x0 <= x <= x1:
-                self.drag_mode = "resize_top"
-                self.selected_gradient_index = i
-                break
-            # Near bottom line
-            elif abs(y - y1) < 10 and x0 <= x <= x1:
-                self.drag_mode = "resize_bottom"
-                self.selected_gradient_index = i
-                break
-            # Inside box = move
-            elif y0 < y < y1 and x0 <= x <= x1:
-                self.drag_mode = "move"
-                self.selected_gradient_index = i
-                self.last_mouse_y = y
-                break
-            # rotation
-            elif abs(x - hx) < 20 and abs(y - hy) < 20:
-                self.drag_mode = "rotate"
-                self.selected_gradient_index = i
-                break
+    #         # Check if near top line
+    #         if abs(y - y0) < 10 and x0 <= x <= x1:
+    #             self.drag_mode = "resize_top"
+    #             self.selected_gradient_index = i
+    #             break
+    #         # Near bottom line
+    #         elif abs(y - y1) < 10 and x0 <= x <= x1:
+    #             self.drag_mode = "resize_bottom"
+    #             self.selected_gradient_index = i
+    #             break
+    #         # Inside box = move
+    #         elif y0 < y < y1 and x0 <= x <= x1:
+    #             self.drag_mode = "move"
+    #             self.selected_gradient_index = i
+    #             self.last_mouse_y = y
+    #             break
+    #         # rotation
+    #         elif abs(x - hx) < 20 and abs(y - hy) < 20:
+    #             print(' ------------- rotate + ------------- ')
+    #             self.drag_mode = "rotate"
+    #             self.selected_gradient_index = i
+    #             break
+        
+    #         print(' ------------- rotate x - hx ------------- ', abs(x - hx))
+    #         print(' ------------- rotate y - hy ------------- ', abs(y - hy))
+    #     print(' ------------- self.drag_mode ------------- ', self.drag_mode)
 
-    def on_mouse_drag(self, event):
-        if self.selected_gradient_index is None:
-            return
+    # def on_mouse_drag(self, event):
+    #     if self.selected_gradient_index is None:
+    #         return
 
-        x, y = event.x * 2, event.y * 2
-        g = self.gradients[self.selected_gradient_index]
+    #     x, y = event.x * 2, event.y * 2
+    #     g = self.gradients[self.selected_gradient_index]
 
-        x0, y0 = g["start"]
-        x1, y1 = g["end"]
-        x0, x1 = sorted([x0, x1])
-        y0, y1 = sorted([y0, y1])
+    #     x0, y0 = g["start"]
+    #     x1, y1 = g["end"]
+    #     x0, x1 = sorted([x0, x1])
+    #     y0, y1 = sorted([y0, y1])
 
-        if self.drag_mode == "resize_top":
-            self.gradients[self.selected_gradient_index]["start"] = (x0, y)
-        elif self.drag_mode == "resize_bottom":
-            self.gradients[self.selected_gradient_index]["end"] = (x1, y)
-        elif self.drag_mode == "move":
-            dy = y - self.last_mouse_y
-            self.gradients[self.selected_gradient_index]["start"] = (x0, y0 + dy)
-            self.gradients[self.selected_gradient_index]["end"] = (x1, y1 + dy)
-            self.last_mouse_y = y
-        elif self.drag_mode == "move":
-            dy = y - self.last_mouse_y
-            new_start = (x0, y0 + dy)
-            new_end = (x1, y1 + dy)
-            self.gradients[self.selected_gradient_index]["start"] = new_start
-            self.gradients[self.selected_gradient_index]["end"] = new_end
-            self.last_mouse_y = y
+    #     if self.drag_mode == "resize_top":
+    #         self.gradients[self.selected_gradient_index]["start"] = (x0, y)
+    #     elif self.drag_mode == "resize_bottom":
+    #         self.gradients[self.selected_gradient_index]["end"] = (x1, y)
+    #     elif self.drag_mode == "move":
+    #         dy = y - self.last_mouse_y
+    #         self.gradients[self.selected_gradient_index]["start"] = (x0, y0 + dy)
+    #         self.gradients[self.selected_gradient_index]["end"] = (x1, y1 + dy)
+    #         self.last_mouse_y = y
+    #     elif self.drag_mode == "rotate":
+    #         print(' ------------- rotate ------------- ')
+    #         dy = y - self.last_mouse_y
+    #         new_start = (x0, y0 + dy)
+    #         new_end = (x1, y1 + dy)
+    #         self.gradients[self.selected_gradient_index]["start"] = new_start
+    #         self.gradients[self.selected_gradient_index]["end"] = new_end
+    #         self.last_mouse_y = y
 
-            # Recalculate handle position
-            cx = (new_start[0] + new_end[0]) // 2
-            cy = (new_start[1] + new_end[1]) // 2
-            angle = self.gradients[self.selected_gradient_index]["angle"]
-            self.gradients[self.selected_gradient_index]["handle"] = self.calculate_rotation_handle(cx, cy, angle)
-
-
-
-        self.apply_gradients_to_selection()
-
-    def on_mouse_up(self, event):
-        self.drag_mode = None
-        self.selected_gradient_index = None
-
-    
-    def on_mouse_move(self, event):
-        x, y = event.x * 2, event.y * 2
-        for g in self.gradients:
-            hx, hy = g["handle"]
-            if abs(x - hx) < 20 and abs(y - hy) < 20:
-                self.config(cursor="exchange")  # or "circle", or a custom cursor
-                return
-        self.config(cursor="arrow")
+    #         # Recalculate handle position
+    #         cx = (new_start[0] + new_end[0]) // 2
+    #         cy = (new_start[1] + new_end[1]) // 2
+    #         angle = self.gradients[self.selected_gradient_index]["angle"]
+    #         self.gradients[self.selected_gradient_index]["handle"] = self.calculate_rotation_handle(cx, cy, angle)
 
 
+    #     print(' ------------- on_mouse_drag ------------- ', self.drag_mode)
+    #     self.apply_gradients_to_selection()
 
-    def on_mouse_double_click(self, event):
-        print(' --------------------- on_mouse_double_click --------------------- ')
-
-    def delete_gradient(self, event):
-
-        confirm = InfoWindow(self, 'Delete ?')
-        answer = confirm.get_answer()
-        print(' --------------------- answer --------------------- ', answer)
-
-        if answer == False:
-            return
-        else:
-            x, y = event.x * 2, event.y * 2
-
-            for i, g in enumerate(self.gradients):
-                x0, y0 = g["start"]
-                x1, y1 = g["end"]
-
-                x0, x1 = sorted([x0, x1])
-                y0, y1 = sorted([y0, y1])
-
-                print(' --------------------- delete_gradient x, y --------------------- ', x, y, i)
-                print(' --------------------- delete_gradient x0, y0 --------------------- ', x0, y0)
-                print(' --------------------- delete_gradient x1, y1 --------------------- ', x1, y1)
-
-                if x0 <= x <= x1 and y0 <= y <= y1:
-                    del self.gradients[i]
-                    self.apply_gradients_to_selection()
-                    break
+    # def on_mouse_up(self, event):
+    #     self.drag_mode = None
+    #     self.selected_gradient_index = None
 
     
-    def calculate_rotation_handle(self, cx, cy, angle_deg, offset=50):
-        angle_rad = math.radians(angle_deg)
-        hx = int(cx + offset * math.cos(angle_rad - math.pi / 2))  # above center
-        hy = int(cy + offset * math.sin(angle_rad - math.pi / 2))
-        return (hx, hy)
+    # def on_mouse_move(self, event):
+    #     x, y = event.x * 2, event.y * 2
+    #     for g in self.gradients:
+    #         hx, hy = g["handle"]
+    #         if abs(x - hx) < 20 and abs(y - hy) < 20:
+    #             self.config(cursor="exchange")  # or "circle", or a custom cursor
+    #             self.drag_mode = "rotate"
+    #             print(' --------------------- on_mouse_move - rotate - hx, hy --------------------- ', hx, hy)
+    #             return
+    #     self.config(cursor="arrow")
+
+
+
+    # def on_mouse_double_click(self, event):
+    #     print(' --------------------- on_mouse_double_click --------------------- ')
+
+    # def delete_gradient(self, event):
+
+    #     confirm = InfoWindow(self, 'Delete ?')
+    #     answer = confirm.get_answer()
+    #     print(' --------------------- answer --------------------- ', answer)
+
+    #     if answer == False:
+    #         return
+    #     else:
+    #         x, y = event.x * 2, event.y * 2
+
+    #         for i, g in enumerate(self.gradients):
+    #             x0, y0 = g["start"]
+    #             x1, y1 = g["end"]
+
+    #             x0, x1 = sorted([x0, x1])
+    #             y0, y1 = sorted([y0, y1])
+
+    #             print(' --------------------- delete_gradient x, y --------------------- ', x, y, i)
+    #             print(' --------------------- delete_gradient x0, y0 --------------------- ', x0, y0)
+    #             print(' --------------------- delete_gradient x1, y1 --------------------- ', x1, y1)
+
+    #             if x0 <= x <= x1 and y0 <= y <= y1:
+    #                 del self.gradients[i]
+    #                 self.apply_gradients_to_selection()
+    #                 break
+
+    
+    # def calculate_rotation_handle(self, cx, cy, angle_deg, offset=50):
+    #     # print(' --------------------- calculate_rotation_handle --------------------- ', cx, cy, angle_deg)
+    #     angle_rad = math.radians(angle_deg)
+    #     hx = int(cx + offset * math.cos(angle_rad - math.pi / 2))  # above center
+    #     hy = int(cy + offset * math.sin(angle_rad - math.pi / 2))
+    #     print(' --------------------- calculate_rotation_handle --------------------- ', hx, hy)
+    #     return (hx, hy)
 
 
 
 
     def apply_gradients_to_selection(self):
 
-        img = apply_gradients(
+        img = self.gradients_controller.apply_gradients(
             self.small_image.copy(),
             self.gradients
         )
