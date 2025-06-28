@@ -9,8 +9,7 @@ class GradientController:
         self.drag_mode = None
         self.last_mouse_y = None
         self.selected_index = None
-        # self.img=app.small_image
-        # self.gradients = app.gradients
+        self.selected_gradient_index = None
 
     def on_mouse_down(self, event):
         x, y = event.x * 2, event.y * 2  # scale to match small_image size
@@ -146,14 +145,13 @@ class GradientController:
                 print(' --------------------- delete_gradient x1, y1 --------------------- ', x1, y1)
 
                 if x0 <= x <= x1 and y0 <= y <= y1:
-                    del self.app.gradients[i]
+                    del [i]
                     self.apply_gradients(self.app.small_image.copy(), self.app.gradients)
                     break
 
 
     def apply_gradients(self, img, gradients):
-
-        print(' --------------------- gradients --------------------- ', gradients)
+        img = img.astype(np.float32) / 255.0  # Normalize
 
         for g in gradients:
             if not g["start"] or not g["end"]:
@@ -161,29 +159,33 @@ class GradientController:
 
             x0, y0 = g["start"]
             x1, y1 = g["end"]
-            # angle = g.get("angle", 0.0)
-
-            # Scale to original resolution if needed
             x0, x1 = sorted([int(x0), int(x1)])
             y0, y1 = sorted([int(y0), int(y1)])
 
-            print('Gradient:', (x0, y0), 'to', (x1, y1))
-
             h, w = y1 - y0, x1 - x0
             if h <= 0 or w <= 0:
-                continue  # Skip invalid
+                continue
 
-            # Draw gradient lines
-            cv2.line(img, (x0, y0), (x1, y0), (255, 0, 0), 1)
-            cv2.line(img, (x0, y1), (x1, y1), (255, 0, 0), 1)
-            cv2.circle(img, g["handle"], 6, (0, 255, 0), -1)
+            # Get adjustments (example: contrast + brightness)
+            brightness = g.get("exposure")
+            contrast = g.get("contrast") 
 
+            # Build vertical fade gradient
+            fade = np.linspace(1.0, 0.0, h).reshape(h, 1, 1)  # shape (h, 1, 1)
 
-            # Vertical gradient
-            alpha = np.linspace(1.0, 0.0, h).reshape(-1, 1)
+            region = img[y0:y1, x0:x1]  # shape (h, w, 3)
 
-            # Blend effect into image
-            for c in range(3):
-                img[y0:y1, x0:x1, c] = img[y0:y1, x0:x1, c] * alpha
+            # Apply brightness
+            region += brightness * fade
 
-        return img
+            # Apply contrast
+            mean = 0.5
+            region = (region - mean) * (1 + contrast * fade) + mean
+
+            # Clip to valid range
+            img[y0:y1, x0:x1] = np.clip(region, 0, 1)
+
+        img = (img * 255).astype(np.uint8)
+
+        self.app.display_image = img
+        self.app.show_image(self.app.display_image)

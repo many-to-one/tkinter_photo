@@ -89,7 +89,6 @@ class ImageEditorApp(ctk.CTk):
         self.root.bind("<ButtonRelease-1>", self.gradients_controller.on_mouse_up)            # Release
         self.root.bind("<Motion>", self.gradients_controller.on_mouse_move)
 
-        # self._create_sliders()
         # End of Gradient
 
 
@@ -106,7 +105,7 @@ class ImageEditorApp(ctk.CTk):
 # Gradient                                                    #
 # ---------------------------------------------------------------------------------- #
 
-    def _create_sliders(self):
+    def gradient_sliders(self):
         self.sliders = {}
         for name in ['exposure', 'contrast', 'temperature', 'tint', 'saturation', 'strength']:
             label = ctk.CTkLabel(self.panel, text=name.title())
@@ -118,13 +117,14 @@ class ImageEditorApp(ctk.CTk):
                 from_=-1.0 if name != 'strength' else 0.0,
                 to=1.0,
                 variable=var,
-                command=lambda v, n=name: self.update_current_setting(n, float(v))
+                command=lambda v, n=name: self.update_gradient_changes(n, float(v))
             )
             slider.set(0.0 if name != 'strength' else 1.0)
             slider.pack(fill='x', padx=10, pady=(0, 10))
             self.sliders[name] = (slider, var)
 
     def add_gradient(self):
+        self.gradient_sliders()
         start = (0, 100)
         end = (2000, 300)
         angle = 0.0
@@ -137,167 +137,28 @@ class ImageEditorApp(ctk.CTk):
             "end": end,
             "angle": angle,
             "handle": handle,
-            "effects": {...}
+            "effects": {...},
+            "exposure": 0.0,
+            "contrast": 0.0,
         })
 
-        self.apply_gradients_to_selection()
-
-        print(' --------------------- add_gradient ------------------', self.gradients)
-
-    # def on_mouse_down(self, event):
-    #     x, y = event.x * 2, event.y * 2  # scale to match small_image size
-    #     clicked_x, clicked_y = event.x, event.y
-
-    #     for i, g in enumerate(self.gradients):
-    #         x0, y0 = g["start"]
-    #         x1, y1 = g["end"]
-
-    #         x0, x1 = sorted([x0, x1])
-    #         y0, y1 = sorted([y0, y1])
-
-    #         hx, hy = g["handle"]
-
-    #         # Check if near top line
-    #         if abs(y - y0) < 10 and x0 <= x <= x1:
-    #             self.drag_mode = "resize_top"
-    #             self.selected_gradient_index = i
-    #             break
-    #         # Near bottom line
-    #         elif abs(y - y1) < 10 and x0 <= x <= x1:
-    #             self.drag_mode = "resize_bottom"
-    #             self.selected_gradient_index = i
-    #             break
-    #         # Inside box = move
-    #         elif y0 < y < y1 and x0 <= x <= x1:
-    #             self.drag_mode = "move"
-    #             self.selected_gradient_index = i
-    #             self.last_mouse_y = y
-    #             break
-    #         # rotation
-    #         elif abs(x - hx) < 20 and abs(y - hy) < 20:
-    #             print(' ------------- rotate + ------------- ')
-    #             self.drag_mode = "rotate"
-    #             self.selected_gradient_index = i
-    #             break
-        
-    #         print(' ------------- rotate x - hx ------------- ', abs(x - hx))
-    #         print(' ------------- rotate y - hy ------------- ', abs(y - hy))
-    #     print(' ------------- self.drag_mode ------------- ', self.drag_mode)
-
-    # def on_mouse_drag(self, event):
-    #     if self.selected_gradient_index is None:
-    #         return
-
-    #     x, y = event.x * 2, event.y * 2
-    #     g = self.gradients[self.selected_gradient_index]
-
-    #     x0, y0 = g["start"]
-    #     x1, y1 = g["end"]
-    #     x0, x1 = sorted([x0, x1])
-    #     y0, y1 = sorted([y0, y1])
-
-    #     if self.drag_mode == "resize_top":
-    #         self.gradients[self.selected_gradient_index]["start"] = (x0, y)
-    #     elif self.drag_mode == "resize_bottom":
-    #         self.gradients[self.selected_gradient_index]["end"] = (x1, y)
-    #     elif self.drag_mode == "move":
-    #         dy = y - self.last_mouse_y
-    #         self.gradients[self.selected_gradient_index]["start"] = (x0, y0 + dy)
-    #         self.gradients[self.selected_gradient_index]["end"] = (x1, y1 + dy)
-    #         self.last_mouse_y = y
-    #     elif self.drag_mode == "rotate":
-    #         print(' ------------- rotate ------------- ')
-    #         dy = y - self.last_mouse_y
-    #         new_start = (x0, y0 + dy)
-    #         new_end = (x1, y1 + dy)
-    #         self.gradients[self.selected_gradient_index]["start"] = new_start
-    #         self.gradients[self.selected_gradient_index]["end"] = new_end
-    #         self.last_mouse_y = y
-
-    #         # Recalculate handle position
-    #         cx = (new_start[0] + new_end[0]) // 2
-    #         cy = (new_start[1] + new_end[1]) // 2
-    #         angle = self.gradients[self.selected_gradient_index]["angle"]
-    #         self.gradients[self.selected_gradient_index]["handle"] = self.calculate_rotation_handle(cx, cy, angle)
-
-
-    #     print(' ------------- on_mouse_drag ------------- ', self.drag_mode)
-    #     self.apply_gradients_to_selection()
-
-    # def on_mouse_up(self, event):
-    #     self.drag_mode = None
-    #     self.selected_gradient_index = None
-
-    
-    # def on_mouse_move(self, event):
-    #     x, y = event.x * 2, event.y * 2
-    #     for g in self.gradients:
-    #         hx, hy = g["handle"]
-    #         if abs(x - hx) < 20 and abs(y - hy) < 20:
-    #             self.config(cursor="exchange")  # or "circle", or a custom cursor
-    #             self.drag_mode = "rotate"
-    #             print(' --------------------- on_mouse_move - rotate - hx, hy --------------------- ', hx, hy)
-    #             return
-    #     self.config(cursor="arrow")
-
-
-
-    # def on_mouse_double_click(self, event):
-    #     print(' --------------------- on_mouse_double_click --------------------- ')
-
-    # def delete_gradient(self, event):
-
-    #     confirm = InfoWindow(self, 'Delete ?')
-    #     answer = confirm.get_answer()
-    #     print(' --------------------- answer --------------------- ', answer)
-
-    #     if answer == False:
-    #         return
-    #     else:
-    #         x, y = event.x * 2, event.y * 2
-
-    #         for i, g in enumerate(self.gradients):
-    #             x0, y0 = g["start"]
-    #             x1, y1 = g["end"]
-
-    #             x0, x1 = sorted([x0, x1])
-    #             y0, y1 = sorted([y0, y1])
-
-    #             print(' --------------------- delete_gradient x, y --------------------- ', x, y, i)
-    #             print(' --------------------- delete_gradient x0, y0 --------------------- ', x0, y0)
-    #             print(' --------------------- delete_gradient x1, y1 --------------------- ', x1, y1)
-
-    #             if x0 <= x <= x1 and y0 <= y <= y1:
-    #                 del self.gradients[i]
-    #                 self.apply_gradients_to_selection()
-    #                 break
-
-    
-    # def calculate_rotation_handle(self, cx, cy, angle_deg, offset=50):
-    #     # print(' --------------------- calculate_rotation_handle --------------------- ', cx, cy, angle_deg)
-    #     angle_rad = math.radians(angle_deg)
-    #     hx = int(cx + offset * math.cos(angle_rad - math.pi / 2))  # above center
-    #     hy = int(cy + offset * math.sin(angle_rad - math.pi / 2))
-    #     print(' --------------------- calculate_rotation_handle --------------------- ', hx, hy)
-    #     return (hx, hy)
-
-
-
-
-    def apply_gradients_to_selection(self):
-
-        img = self.gradients_controller.apply_gradients(
+        self.gradients_controller.apply_gradients(
             self.small_image.copy(),
             self.gradients
         )
 
+        print(' --------------------- add_gradient ------------------', self.gradients)
 
+    def update_gradient_changes(self, name, value):
+        print(' --------------------- update_gradient_changes ------------------', name, value)
 
-        self.display_image = img
-        self.show_image(self.display_image)
+        for i, g in enumerate(self.gradients):
+            self.gradients[i][name] = value
 
-
-
+        self.gradients_controller.apply_gradients(
+            self.small_image.copy(),
+            self.gradients
+        )
 
 # ---------------------------------------------------------------------------------- #
 # Info window and process                                                           #
