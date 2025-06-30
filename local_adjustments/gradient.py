@@ -167,13 +167,30 @@ class GradientController:
                 continue
 
             # Get adjustments (example: contrast + brightness)
-            brightness = g.get("exposure")
+            temperature = g.get("temperature") 
+            tint = g.get("tint")
+            brightness = g.get("brightness")
             contrast = g.get("contrast") 
+
+            print(' --------------------- apply_gradients ------------------', temperature, tint)
 
             # Build vertical fade gradient
             fade = np.linspace(1.0, 0.0, h).reshape(h, 1, 1)  # shape (h, 1, 1)
 
             region = img[y0:y1, x0:x1]  # shape (h, w, 3)
+
+            # --- White balance adjustments ---
+            # Temperature shift: warm (positive) = more red/yellow, cool (negative) = more blue
+            temp_strength = 0.6  # increase to see stronger effect
+            region[:, :, 0] += (-temperature * temp_strength) * fade[:, :, 0]  # Blue channel
+            region[:, :, 2] += (temperature * temp_strength) * fade[:, :, 0]   # Red channel
+
+            # Tint shift: green (-) to magenta (+)
+            tint_strength = 0.6
+            region[:, :, 1] += (tint * tint_strength) * fade[:, :, 0]          # Green channel
+            region[:, :, 0] += (-tint * tint_strength * 0.5) * fade[:, :, 0]   # Blue for magenta
+            region[:, :, 2] += (-tint * tint_strength * 0.5) * fade[:, :, 0]   # Red for magenta
+
 
             # Apply brightness
             region += brightness * fade

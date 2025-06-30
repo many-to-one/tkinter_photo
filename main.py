@@ -107,21 +107,44 @@ class ImageEditorApp(ctk.CTk):
 
     def gradient_sliders(self):
         self.sliders = {}
-        for name in ['exposure', 'contrast', 'temperature', 'tint', 'saturation', 'strength']:
+
+        for name in ['brightness', 'contrast', 'temperature', 'tint', 'strength']:
             label = ctk.CTkLabel(self.panel, text=name.title())
-            label.pack(pady=(5, 0), anchor='w')  # nice spacing and left alignment
+            label.pack(pady=(5, 0), anchor='w')
 
             var = ctk.DoubleVar()
+
+            if name == 'temperature':
+                from_, to_, default = 1000, 10000, 6500  # temperature in Kelvin
+            elif name == 'strength':
+                from_, to_, default = 0.0, 1.0, 1.0
+            else:
+                from_, to_, default = -1.0, 1.0, 0.0
+
             slider = ctk.CTkSlider(
                 self.panel,
-                from_=-1.0 if name != 'strength' else 0.0,
-                to=1.0,
+                from_=from_,
+                to=to_,
                 variable=var,
                 command=lambda v, n=name: self.update_gradient_changes(n, float(v))
             )
-            slider.set(0.0 if name != 'strength' else 1.0)
+            slider.set(default)
             slider.pack(fill='x', padx=10, pady=(0, 10))
             self.sliders[name] = (slider, var)
+
+
+        # controls = ctk.CTkScrollableFrame(self, width=300, fg_color="white")
+        # controls.pack(side="right", fill="y")
+        # var = ctk.DoubleVar()
+
+        # # White balance
+        # white_balance_section = self.create_accordion_section(controls, "White Balance")
+        # self.temperature_slider = self.create_slider(white_balance_section, 1000, 10000, 6500, command=None, text="Temperature (K)", tipo='temperature', gradient=True)
+        # self.tint_slider = self.create_slider(white_balance_section, -150, 150, 0, command=None, text="Tint", tipo='tint', gradient=True)
+        # # Tone 
+        # tone_section = self.create_accordion_section(controls, "Tone")
+        # self.brightness_slider = self.create_slider(tone_section, -100, 100, 0, command=None, text="Brightness", tipo='brightness', gradient=True)
+        # self.contrast_slider = self.create_slider(tone_section, 0.1, 2.0, 1.0, command=None, text="Contrast", tipo='contrast', gradient=True)
 
     def add_gradient(self):
         self.gradient_sliders()
@@ -138,8 +161,31 @@ class ImageEditorApp(ctk.CTk):
             "angle": angle,
             "handle": handle,
             "effects": {...},
-            "exposure": 0.0,
+            "brightness": 0.0,
             "contrast": 0.0,
+            "temperature": 6500,
+            "tint": 0.0,
+            # "saturation": 1.0,
+            # "dehaze": 0.0,
+            # "fog": 0.0,
+            # "shadows": 1.0,
+            # "lights": 1.0,
+            # "hsl": {
+            #     "Red": {"hue": 0.0, "sat": 1.0, "lum": 1.0},
+            #     "Orange": {"hue": 0.0, "sat": 1.0, "lum": 1.0},
+            #     "Yellow": {"hue": 0.0, "sat": 1.0, "lum": 1.0},
+            #     "Green": {"hue": 0.0, "sat": 1.0, "lum": 1.0},
+            #     "Aqua": {"hue": 0.0, "sat": 1.0, "lum": 1.0},
+            #     "Blue": {"hue": 0.0, "sat": 1.0, "lum": 1.0},
+            #     "Purple": {"hue": 0.0, "sat": 1.0, "lum": 1.0},
+            #     "Magenta": {"hue": 0.0, "sat": 1.0, "lum": 1.0},
+            # },
+            # "calibration": {
+            #     "shadows_tint": 0.0,
+            #     "Red": {"hue": 0.0, "sat": 1.0},
+            #     "Green": {"hue": 0.0, "sat": 1.0},
+            #     "Blue": {"hue": 0.0, "sat": 1.0},
+            # }
         })
 
         self.gradients_controller.apply_gradients(
@@ -365,7 +411,7 @@ class ImageEditorApp(ctk.CTk):
             frame.pack(fill="x", padx=10, pady=5)
 
 
-    def create_slider(self, parent, from_, to, default, command, text, tipo):
+    def create_slider(self, parent, from_, to, default, command, text, tipo, gradient=False):
 
         frame = ctk.CTkFrame(parent)  # Optional: wrap each slider in a frame
         frame.pack(fill="x", pady=4)
@@ -374,7 +420,7 @@ class ImageEditorApp(ctk.CTk):
         label.pack(anchor="w")
 
         print(f' ----------- create_slider TIPO------------- ', tipo)
-        slider = ctk.CTkSlider(frame, from_=from_, to=to, command=lambda value: self.on_slider_change(value, tipo))
+        slider = ctk.CTkSlider(frame, from_=from_, to=to, command=lambda value: self.on_slider_change(value, tipo, gradient))
         slider.set(default)
         print(f' ----------- slider {text} ------------- ', slider.get())
         slider.pack(fill="x")
@@ -382,7 +428,10 @@ class ImageEditorApp(ctk.CTk):
 
         return slider
 
-    def on_slider_change(self, value, tipo):
+    def on_slider_change(self, value, tipo, gradient=False):
+
+        global __gradient
+        __gradient = gradient
         # This runs every time the slider is dragged (live preview optional)
         global current_slider_value
         # global slider_command
@@ -395,7 +444,12 @@ class ImageEditorApp(ctk.CTk):
         # Called only when user releases the slider
         print(" ######################## Released at: ######################## ", current_slider_value)
         print(" ######################## on_slider_release: ######################## ", slider_tipo)
-        self.apply_adjustments(slider_tipo, current_slider_value)
+        print(" ######################## __gradient: ######################## ", __gradient)
+
+        if __gradient == True:
+            self.update_gradient_changes(slider_tipo, current_slider_value)
+        else:
+            self.apply_adjustments(slider_tipo, current_slider_value)
 
     def update_image(self, value, tipo, _=None):
         print(" ------------------ update_image tipo ------------------ ", tipo)
