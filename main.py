@@ -53,9 +53,6 @@ class ImageEditorApp(ctk.CTk):
         self.geometry("1000x600")
         self.configure(bg="#212121")  # Set background color
 
-        self.panel = ctk.CTkFrame(self, width=200)
-        self.panel.pack(side="left", fill="y", padx=10, pady=10)
-
         # Image variables
         self.original_image = None
         self.small_image = None
@@ -73,8 +70,12 @@ class ImageEditorApp(ctk.CTk):
         self.root.bind('<Control-equal>', self.zoom_in)  # Handle Ctrl + = (some keyboards)
 
         # Gradient
+        self.panel = ctk.CTkFrame(self, width=0)
+        self.panel.pack(side="left", fill="y", padx=10, pady=10)
+
         self.gradients_controller = GradientController(self)
         self.gradients = []
+        self.sliders = {}
         self.start_pos = None
         self.end_pos = None
         self.drag_mode = None  # "move", "resize_top", "resize_bottom"
@@ -88,6 +89,7 @@ class ImageEditorApp(ctk.CTk):
         self.root.bind("<B1-Motion>", self.gradients_controller.on_mouse_drag)                # Drag with button 1
         self.root.bind("<ButtonRelease-1>", self.gradients_controller.on_mouse_up)            # Release
         self.root.bind("<Motion>", self.gradients_controller.on_mouse_move)
+        self.gradient_sliders()
 
         # End of Gradient
 
@@ -106,23 +108,26 @@ class ImageEditorApp(ctk.CTk):
 # ---------------------------------------------------------------------------------- #
 
     def gradient_sliders(self):
-        self.sliders = {}
+
+        self.panel.width = 200
+        self.slider_frame = ctk.CTkFrame(self.panel)
+        self.slider_frame.pack_forget()  # Hide initially
 
         for name in ['brightness', 'contrast', 'temperature', 'tint', 'strength']:
-            label = ctk.CTkLabel(self.panel, text=name.title())
+            label = ctk.CTkLabel(self.slider_frame, text=name.title())
             label.pack(pady=(5, 0), anchor='w')
 
             var = ctk.DoubleVar()
 
             if name == 'temperature':
-                from_, to_, default = 1000, 10000, 6500  # temperature in Kelvin
+                from_, to_, default = -1.0, 1.0, 0.0
             elif name == 'strength':
                 from_, to_, default = 0.0, 1.0, 1.0
             else:
                 from_, to_, default = -1.0, 1.0, 0.0
 
             slider = ctk.CTkSlider(
-                self.panel,
+                self.slider_frame,
                 from_=from_,
                 to=to_,
                 variable=var,
@@ -146,16 +151,24 @@ class ImageEditorApp(ctk.CTk):
         # self.brightness_slider = self.create_slider(tone_section, -100, 100, 0, command=None, text="Brightness", tipo='brightness', gradient=True)
         # self.contrast_slider = self.create_slider(tone_section, 0.1, 2.0, 1.0, command=None, text="Contrast", tipo='contrast', gradient=True)
 
+
     def add_gradient(self):
-        self.gradient_sliders()
-        start = (0, 100)
+
+        self.gradients_controller.clear_sliders()
+        gradient_index = len(self.gradients)
+        start = (0, 0)
         end = (2000, 300)
         angle = 0.0
         cx = (start[0] + end[0]) // 2
         cy = (start[1] + end[1]) // 2
         handle = self.gradients_controller.calculate_rotation_handle(cx, cy, angle)
 
+        for g in self.gradients:
+            g["active"] = False
+
         self.gradients.append({
+            "gradient_index": gradient_index,
+            "active": True,
             "start": start,
             "end": end,
             "angle": angle,
@@ -163,7 +176,7 @@ class ImageEditorApp(ctk.CTk):
             "effects": {...},
             "brightness": 0.0,
             "contrast": 0.0,
-            "temperature": 6500,
+            "temperature": 0.0,
             "tint": 0.0,
             # "saturation": 1.0,
             # "dehaze": 0.0,
@@ -188,6 +201,8 @@ class ImageEditorApp(ctk.CTk):
             # }
         })
 
+        self.slider_frame.pack(fill='x', padx=10, pady=10)  # Show
+
         self.gradients_controller.apply_gradients(
             self.small_image.copy(),
             self.gradients
@@ -195,11 +210,15 @@ class ImageEditorApp(ctk.CTk):
 
         print(' --------------------- add_gradient ------------------', self.gradients)
 
+    # def update_gradient_changes(self, name, value, gradient_index):
     def update_gradient_changes(self, name, value):
         print(' --------------------- update_gradient_changes ------------------', name, value)
 
-        for i, g in enumerate(self.gradients):
-            self.gradients[i][name] = value
+        active_gradient = next((g for g in self.gradients if g["active"]), None)
+        if not active_gradient:
+            return
+
+        active_gradient[name] = value
 
         self.gradients_controller.apply_gradients(
             self.small_image.copy(),

@@ -51,6 +51,7 @@ class GradientController:
             print(' ------------- rotate y - hy ------------- ', abs(y - hy))
         print(' ------------- self.drag_mode ------------- ', self.drag_mode)
 
+
     def on_mouse_drag(self, event):
         if self.selected_gradient_index is None:
             return
@@ -97,6 +98,7 @@ class GradientController:
 
     
     def on_mouse_move(self, event):
+
         x, y = event.x * 2, event.y * 2
         for g in self.app.gradients:
             hx, hy = g["handle"]
@@ -110,7 +112,51 @@ class GradientController:
 
 
     def on_mouse_double_click(self, event):
+
+        x, y = event.x * 2, event.y * 2
+
+        found = False
+
+        for g in self.app.gradients:
+            g["active"] = False  # deactivate all by default
+            if self.is_inside_gradient(x, y, g):
+                g["active"] = True
+                found = True
+                self.app.slider_frame.pack(fill='x', padx=10, pady=10)  # Show
+                self.load_gradient_to_sliders(g)  # <-- Load values
+                break
+
+        if not found:
+            self.app.slider_frame.pack_forget()
+            self.app.panel.width = 0
+
         print(' --------------------- on_mouse_double_click --------------------- ')
+
+
+    def is_inside_gradient(self, x, y, gradient):
+        print(' ------------- is_inside_gradient x, y ------------- ', x, y)
+        x0, y0 = gradient["start"]
+        x1, y1 = gradient["end"]
+
+        x_min, x_max = sorted([x0, x1])
+        y_min, y_max = sorted([y0, y1])
+
+        print(' ------------- is_inside_gradient x_min, x_max ------------- ', x_min, x_max)
+        print(' ------------- is_inside_gradient y_min, y_max ------------- ', y_min, y_max)
+
+        return x_min <= x <= x_max and y_min <= y <= y_max
+
+    
+    def load_gradient_to_sliders(self, gradient):
+        for name in ['brightness', 'contrast', 'temperature', 'tint', 'strength']:
+            if name in self.app.sliders and name in gradient:
+                slider, var = self.app.sliders[name]
+                var.set(gradient[name])
+
+
+    def clear_sliders(self):
+        for name, (slider, var) in self.app.sliders.items():
+            var.set(0.0 if name != 'strength' else 1.0)
 
 
     def calculate_rotation_handle(self, cx, cy, angle_deg, offset=50):
@@ -154,6 +200,7 @@ class GradientController:
         img = img.astype(np.float32) / 255.0  # Normalize
 
         for g in gradients:
+            print(' --------------------- apply_gradients g in loop ------------------', g)
             if not g["start"] or not g["end"]:
                 continue
 
@@ -172,7 +219,7 @@ class GradientController:
             brightness = g.get("brightness")
             contrast = g.get("contrast") 
 
-            print(' --------------------- apply_gradients ------------------', temperature, tint)
+            # print(' --------------------- apply_gradients ------------------', temperature, tint)
 
             # Build vertical fade gradient
             fade = np.linspace(1.0, 0.0, h).reshape(h, 1, 1)  # shape (h, 1, 1)
@@ -185,7 +232,7 @@ class GradientController:
             region[:, :, 0] += (-temperature * temp_strength) * fade[:, :, 0]  # Blue channel
             region[:, :, 2] += (temperature * temp_strength) * fade[:, :, 0]   # Red channel
 
-            # Tint shift: green (-) to magenta (+)
+            # # Tint shift: green (-) to magenta (+)
             tint_strength = 0.6
             region[:, :, 1] += (tint * tint_strength) * fade[:, :, 0]          # Green channel
             region[:, :, 0] += (-tint * tint_strength * 0.5) * fade[:, :, 0]   # Blue for magenta
