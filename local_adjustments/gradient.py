@@ -90,7 +90,8 @@ class GradientController:
 
 
         print(' ------------- on_mouse_drag ------------- ', self.drag_mode)
-        self.apply_gradients(self.app.small_image.copy(), self.app.gradients)
+        # self.apply_gradients(self.app.small_image.copy(), self.app.gradients)
+        self.app.refresh_image()
 
     def on_mouse_up(self, event):
         self.drag_mode = None
@@ -196,60 +197,137 @@ class GradientController:
                     break
 
 
+    # def apply_gradients(self, img, gradients):
+    #     img = img.astype(np.float32) / 255.0  # Normalize image
+
+    #     for g in gradients:
+    #         if not g["start"] or not g["end"]:
+    #             continue
+
+    #         x0, y0 = g["start"]
+    #         x1, y1 = g["end"]
+    #         x0, x1 = sorted([int(x0), int(x1)])
+    #         y0, y1 = sorted([int(y0), int(y1)])
+    #         w, h = x1 - x0, y1 - y0
+
+    #         if w <= 0 or h <= 0:
+    #             continue
+
+    #         # Extract adjustments
+    #         temperature = g.get("temperature", 0.0)
+    #         tint = g.get("tint", 0.0)
+    #         brightness = g.get("brightness", 0.0)
+    #         contrast = g.get("contrast", 0.0)
+    #         angle = g.get("angle", 45)  # default angle = 90° (vertical)
+
+    #         # Generate fade mask with rotation
+    #         fade = self.generate_rotated_fade_mask(w, h, angle).reshape(h, w, 1)
+
+    #         # Extract region
+    #         region = img[y0:y1, x0:x1]
+
+    #         # Skip invalid region
+    #         if region.shape[:2] != fade.shape[:2]:
+    #             continue
+
+    #         # --- Apply adjustments with fade ---
+
+    #         # Temperature (cool to warm: blue ↔ red)
+    #         temp_strength = 0.6
+    #         region[:, :, 0] += (-temperature * temp_strength) * fade[:, :, 0]  # Blue
+    #         region[:, :, 2] += (temperature * temp_strength) * fade[:, :, 0]   # Red
+
+    #         # Tint (green ↔ magenta)
+    #         tint_strength = 0.6
+    #         region[:, :, 1] += (tint * tint_strength) * fade[:, :, 0]         # Green
+    #         region[:, :, 0] += (-tint * tint_strength * 0.5) * fade[:, :, 0]  # Blue
+    #         region[:, :, 2] += (-tint * tint_strength * 0.5) * fade[:, :, 0]  # Red
+
+    #         # Brightness
+    #         region += brightness * fade
+
+    #         # Contrast
+    #         mean = 0.5
+    #         region = (region - mean) * (1 + contrast * fade) + mean
+
+    #         # Clip and paste back
+    #         img[y0:y1, x0:x1] = np.clip(region, 0, 1)
+
+    #     return (img * 255).astype(np.uint8)
+
+
+    def generate_rotated_fade_mask(self, w, h, angle_degrees):
+        X, Y = np.meshgrid(np.linspace(-1, 1, w), np.linspace(-1, 1, h))
+        angle_rad = np.radians(angle_degrees)
+        direction = np.cos(angle_rad) * X + np.sin(angle_rad) * Y
+        fade = 0.5 - direction / 2
+        return np.clip(fade, 0, 1)
+
+
+
+
     def apply_gradients(self, img, gradients):
         img = img.astype(np.float32) / 255.0  # Normalize
+
+        img_h, img_w = img.shape[:2]
 
         for g in gradients:
             print(' --------------------- apply_gradients g in loop ------------------', g)
             if not g["start"] or not g["end"]:
                 continue
 
+            # Get coordinates
             x0, y0 = g["start"]
             x1, y1 = g["end"]
+
+            # Sort and clamp to image bounds
             x0, x1 = sorted([int(x0), int(x1)])
             y0, y1 = sorted([int(y0), int(y1)])
 
+            x0 = max(0, min(x0, img_w))
+            x1 = max(0, min(x1, img_w))
+            y0 = max(0, min(y0, img_h))
+            y1 = max(0, min(y1, img_h))
+
             h, w = y1 - y0, x1 - x0
             if h <= 0 or w <= 0:
+                print(f"⚠️ Skipping gradient with zero-size region: ({y0}:{y1}, {x0}:{x1})")
                 continue
 
-            # Get adjustments (example: contrast + brightness)
-            temperature = g.get("temperature") 
-            tint = g.get("tint")
-            brightness = g.get("brightness")
-            contrast = g.get("contrast") 
+            # Adjustments
+            temperature = g.get("temperature", 0)
+            tint = g.get("tint", 0)
+            brightness = g.get("brightness", 0)
+            contrast = g.get("contrast", 0)
+            angle = g.get("angle", 45.0)  # default angle = 90° (vertical)
 
-            # print(' --------------------- apply_gradients ------------------', temperature, tint)
+            # Generate fade mask with rotation
+            # fade = self.generate_rotated_fade_mask(w, h, angle).reshape(h, w, 1)
 
             # Build vertical fade gradient
             fade = np.linspace(1.0, 0.0, h).reshape(h, 1, 1)  # shape (h, 1, 1)
-
-            region = img[y0:y1, x0:x1]  # shape (h, w, 3)
+            region = img[y0:y1, x0:x1]                        # shape (h, w, 3)
 
             # --- White balance adjustments ---
-            # Temperature shift: warm (positive) = more red/yellow, cool (negative) = more blue
-            temp_strength = 0.6  # increase to see stronger effect
-            region[:, :, 0] += (-temperature * temp_strength) * fade[:, :, 0]  # Blue channel
-            region[:, :, 2] += (temperature * temp_strength) * fade[:, :, 0]   # Red channel
-
-            # # Tint shift: green (-) to magenta (+)
+            temp_strength = 0.6
             tint_strength = 0.6
-            region[:, :, 1] += (tint * tint_strength) * fade[:, :, 0]          # Green channel
-            region[:, :, 0] += (-tint * tint_strength * 0.5) * fade[:, :, 0]   # Blue for magenta
-            region[:, :, 2] += (-tint * tint_strength * 0.5) * fade[:, :, 0]   # Red for magenta
 
+            region[:, :, 0] += (-temperature * temp_strength) * fade[:, :, 0]  # Blue
+            region[:, :, 2] += (temperature * temp_strength) * fade[:, :, 0]   # Red
 
-            # Apply brightness
+            region[:, :, 1] += (tint * tint_strength) * fade[:, :, 0]          # Green
+            region[:, :, 0] += (-tint * tint_strength * 0.5) * fade[:, :, 0]   # Blue (magenta)
+            region[:, :, 2] += (-tint * tint_strength * 0.5) * fade[:, :, 0]   # Red (magenta)
+
+            # Brightness
             region += brightness * fade
 
-            # Apply contrast
+            # Contrast
             mean = 0.5
             region = (region - mean) * (1 + contrast * fade) + mean
 
-            # Clip to valid range
+            # Clip and write back
             img[y0:y1, x0:x1] = np.clip(region, 0, 1)
 
-        img = (img * 255).astype(np.uint8)
+        return (img * 255).astype(np.uint8)
 
-        self.app.display_image = img
-        self.app.show_image(self.app.display_image)

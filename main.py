@@ -203,10 +203,12 @@ class ImageEditorApp(ctk.CTk):
 
         self.slider_frame.pack(fill='x', padx=10, pady=10)  # Show
 
-        self.gradients_controller.apply_gradients(
-            self.small_image.copy(),
-            self.gradients
-        )
+        # self.gradients_controller.apply_gradients(
+        #     self.small_image.copy(),
+        #     self.gradients
+        # )
+
+        self.refresh_image()
 
         print(' --------------------- add_gradient ------------------', self.gradients)
 
@@ -220,10 +222,12 @@ class ImageEditorApp(ctk.CTk):
 
         active_gradient[name] = value
 
-        self.gradients_controller.apply_gradients(
-            self.small_image.copy(),
-            self.gradients
-        )
+        # self.gradients_controller.apply_gradients(
+        #     self.small_image.copy(),
+        #     self.gradients
+        # )
+
+        self.refresh_image() 
 
 # ---------------------------------------------------------------------------------- #
 # Info window and process                                                           #
@@ -337,6 +341,7 @@ class ImageEditorApp(ctk.CTk):
 
         # White balance accordion section
         white_balance_section = self.create_accordion_section(controls, "White Balance")
+        # self.temperature_slider = self.create_slider(white_balance_section, 1000, 10000, 6500, command=None, text="Temperature (K)", tipo='temperature')
         self.temperature_slider = self.create_slider(white_balance_section, 1000, 10000, 6500, command=None, text="Temperature (K)", tipo='temperature')
         self.tint_slider = self.create_slider(white_balance_section, -150, 150, 0, command=None, text="Tint", tipo='tint')
 
@@ -465,10 +470,12 @@ class ImageEditorApp(ctk.CTk):
         print(" ######################## on_slider_release: ######################## ", slider_tipo)
         print(" ######################## __gradient: ######################## ", __gradient)
 
-        if __gradient == True:
-            self.update_gradient_changes(slider_tipo, current_slider_value)
-        else:
-            self.apply_adjustments(slider_tipo, current_slider_value)
+        # if __gradient == True:
+        #     self.update_gradient_changes(slider_tipo, current_slider_value)
+        # else:
+        #     self.apply_adjustments(slider_tipo, current_slider_value)
+        self.refresh_image()
+
 
     def update_image(self, value, tipo, _=None):
         print(" ------------------ update_image tipo ------------------ ", tipo)
@@ -530,7 +537,7 @@ class ImageEditorApp(ctk.CTk):
         return self.tint_slider.get() / 1.0  # tint range is already -150 to +150
 
 
-    def apply_adjustments(self, tipo, value, high_res=False):
+    def apply_adjustments(self, tipo=None, value=None, high_res=False):
 
         img = self.small_image.copy()
 
@@ -601,7 +608,24 @@ class ImageEditorApp(ctk.CTk):
         b = cv2.LUT(b, lut)
         img = cv2.merge((b, g, r))
 
-        self.display_image = img
+        # self.display_image = img
+        # self.show_image(self.display_image)
+
+        return img
+
+
+    def refresh_image(self):
+        # Step 1: Apply base adjustments
+        base_adjusted = self.apply_adjustments()
+
+        # Step 2: Apply gradient effects on top
+        final_image = self.gradients_controller.apply_gradients(
+            base_adjusted.copy(),  # Don't mutate base
+            self.gradients
+        )
+
+        # Step 3: Show the final result
+        self.display_image = final_image
         self.show_image(self.display_image)
 
 
