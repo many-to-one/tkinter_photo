@@ -89,6 +89,7 @@ class ImageEditorApp(ctk.CTk):
         self.root.bind("<B1-Motion>", self.gradients_controller.on_mouse_drag)                # Drag with button 1
         self.root.bind("<ButtonRelease-1>", self.gradients_controller.on_mouse_up)            # Release
         self.root.bind("<Motion>", self.gradients_controller.on_mouse_move)
+
         self.gradient_sliders()
 
         # End of Gradient
@@ -113,7 +114,7 @@ class ImageEditorApp(ctk.CTk):
         self.slider_frame = ctk.CTkFrame(self.panel)
         self.slider_frame.pack_forget()  # Hide initially
 
-        for name in ['brightness', 'contrast', 'temperature', 'tint', 'strength']:
+        for name in ['brightness', 'contrast', 'temperature', 'tint', 'strength', "rotate"]:
             label = ctk.CTkLabel(self.slider_frame, text=name.title())
             label.pack(pady=(5, 0), anchor='w')
 
@@ -123,6 +124,8 @@ class ImageEditorApp(ctk.CTk):
                 from_, to_, default = -1.0, 1.0, 0.0
             elif name == 'strength':
                 from_, to_, default = 0.0, 1.0, 1.0
+            elif name == 'rotate':
+                from_, to_, default = 0.0, 180.0, 0.0
             else:
                 from_, to_, default = -1.0, 1.0, 0.0
 
@@ -222,10 +225,8 @@ class ImageEditorApp(ctk.CTk):
 
         active_gradient[name] = value
 
-        # self.gradients_controller.apply_gradients(
-        #     self.small_image.copy(),
-        #     self.gradients
-        # )
+        if name == "rotate":
+            self.gradients_controller.update_gradient_rotation(active_gradient)
 
         self.refresh_image() 
 
@@ -624,7 +625,10 @@ class ImageEditorApp(ctk.CTk):
             self.gradients
         )
 
-        # Step 3: Show the final result
+        # Step 3: Draw gradient edges
+        overlayed = self.gradients_controller.draw_gradient_edges(final_image.copy(), self.gradients)
+
+        # Step 4: Show the final result
         self.display_image = final_image
         self.show_image(self.display_image)
 
