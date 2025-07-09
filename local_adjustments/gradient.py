@@ -217,6 +217,8 @@ class GradientController:
         print(' --------------------- update_gradient_rotation ***angle --------------------- ', angle)
         cx = (gradient["start"][0] + gradient["end"][0]) / 2
         cy = (gradient["start"][1] + gradient["end"][1]) / 2
+        print(' --------------------- update_gradient_rotation ***cx --------------------- ', cx)
+        print(' --------------------- update_gradient_rotation ***cy --------------------- ', cy)
 
         length = math.dist(gradient["start"], gradient["end"]) / 2
         radians = math.radians(angle)
@@ -322,15 +324,16 @@ class GradientController:
 
 
     def generate_rotated_fade_mask(self, width, height, angle):
+
         fade = np.tile(np.linspace(1.0, 0.0, height)[:, np.newaxis], (1, width))
 
         # Obrót z PIL (łatwo)
-        import cv2
         center = (width // 2, height // 2)
         rot_mat = cv2.getRotationMatrix2D(center, -angle, 1.0)
-        rotated = cv2.warpAffine(fade.astype(np.float32), rot_mat, (width, height), flags=cv2.INTER_LINEAR)
+        rotated = cv2.warpAffine(fade.astype(np.float32), rot_mat, (width, height), flags=cv2.INTER_NEAREST )
 
         return np.clip(rotated, 0, 1)
+
 
 
 
