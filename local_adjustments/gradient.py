@@ -7,6 +7,7 @@ class GradientController:
     def __init__(self, app):
         self.app = app
         self.drag_mode = None
+        self.last_mouse_x = None
         self.last_mouse_y = None
         self.selected_index = None
         self.selected_gradient_index = None
@@ -91,6 +92,7 @@ class GradientController:
         print(' ------------- self.drag_mode ------------- ', self.drag_mode)
 
 
+
     def on_mouse_drag(self, event):
         if self.selected_gradient_index is None:
             return
@@ -103,15 +105,31 @@ class GradientController:
         x0, x1 = sorted([x0, x1])
         y0, y1 = sorted([y0, y1])
 
+        cx = (x0 + x1) // 2
+        cy = (y0 + y1) // 2
+
         if self.drag_mode == "resize_top":
-            self.app.gradients[self.selected_gradient_index]["start"] = (x0, y)
+            print(' ------------- resize_top ------------- ')
+            dy = y - cy
+            new_y0 = cy - abs(dy)
+            new_y1 = cy + abs(dy)
+            self.app.gradients[self.selected_gradient_index]["start"] = (x0, new_y0)
+            self.app.gradients[self.selected_gradient_index]["end"] = (x1, new_y1)
+
         elif self.drag_mode == "resize_bottom":
-            self.app.gradients[self.selected_gradient_index]["end"] = (x1, y)
+            print(' ------------- resize_bottom ------------- ')
+            dy = y - cy
+            new_y0 = cy - abs(dy)
+            new_y1 = cy + abs(dy)
+            self.app.gradients[self.selected_gradient_index]["start"] = (x0, new_y0)
+            self.app.gradients[self.selected_gradient_index]["end"] = (x1, new_y1)
+
         elif self.drag_mode == "move":
             dy = y - self.last_mouse_y
             self.app.gradients[self.selected_gradient_index]["start"] = (x0, y0 + dy)
             self.app.gradients[self.selected_gradient_index]["end"] = (x1, y1 + dy)
             self.last_mouse_y = y
+
         elif self.drag_mode == "rotate":
             print(' ------------- rotate ------------- ')
             dy = y - self.last_mouse_y
@@ -127,12 +145,9 @@ class GradientController:
             angle = self.app.gradients[self.selected_gradient_index]["angle"]
             self.app.gradients[self.selected_gradient_index]["handle"] = self.calculate_rotation_handle(cx, cy, angle)
 
-            # self.app.refresh_image()
-
-
         print(' ------------- on_mouse_drag ------------- ', self.drag_mode)
-        # self.apply_gradients(self.app.small_image.copy(), self.app.gradients)
         self.app.refresh_image()
+
 
     def on_mouse_up(self, event):
         self.drag_mode = None
@@ -233,10 +248,10 @@ class GradientController:
         gradient["handle"] = self.calculate_rotation_handle(cx, cy, angle)
 
 
-
+    from info_windows.window_process import InfoWindow
     def delete_gradient(self, event):
 
-        confirm = InfoWindow(self, 'Delete ?')
+        confirm = self.InfoWindow(self, 'Delete ?')
         answer = confirm.get_answer()
         print(' --------------------- answer --------------------- ', answer)
 
@@ -325,12 +340,25 @@ class GradientController:
 
     def generate_rotated_fade_mask(self, width, height, angle):
 
-        fade = np.tile(np.linspace(1.0, 0.0, height)[:, np.newaxis], (1, width))
+        # fade = np.tile(np.linspace(1.0, 0.0, height)[:, np.newaxis], (1, width))
 
-        # Obrót z PIL (łatwo)
+        # # Obrót z PIL (łatwo)
+        # center = (width // 2, height // 2)
+        # rot_mat = cv2.getRotationMatrix2D(center, -angle, 1.0)
+        # rotated = cv2.warpAffine(fade.astype(np.float32), rot_mat, (width, height), flags=cv2.INTER_NEAREST )
+
+        # return np.clip(rotated, 0, 1)
+
+
+        # Tworzy fade 1.0 w środku → 0.0 na górze i dole
+        fade = np.abs(np.linspace(-1.0, 1.0, height))  # [1.0, ..., 0.0, ..., 1.0]
+        fade = 1.0 - fade  # Teraz: 0.0 (góra), 1.0 (środek), 0.0 (dół)
+        fade = np.tile(fade[:, np.newaxis], (1, width))  # Rozciągnięcie na szerokość
+
+        # Rotacja gradientu
         center = (width // 2, height // 2)
         rot_mat = cv2.getRotationMatrix2D(center, -angle, 1.0)
-        rotated = cv2.warpAffine(fade.astype(np.float32), rot_mat, (width, height), flags=cv2.INTER_NEAREST )
+        rotated = cv2.warpAffine(fade.astype(np.float32), rot_mat, (width, height), flags=cv2.INTER_LINEAR)
 
         return np.clip(rotated, 0, 1)
 
@@ -402,3 +430,67 @@ class GradientController:
             img[y0:y1, x0:x1] = np.clip(region, 0, 1)
 
         return (img * 255).astype(np.uint8)
+
+    # def apply_gradients(self, img, gradients):
+    #     img = img.astype(np.float32) / 255.0  # Normalize
+    #     img_h, img_w = img.shape[:2]
+
+    #     for g in gradients:
+    #         if "center" not in g:
+    #             continue
+
+    #         cx, cy = g["center"]
+    #         height_top = g.get("height_top", 50)
+    #         height_bottom = g.get("height_bottom", 50)
+    #         angle = g.get("angle", 0.0)
+
+    #         y0 = int(max(0, cy - height_top))
+    #         y1 = int(min(img_h, cy + height_bottom))
+    #         h = y1 - y0
+
+    #         if h <= 0:
+    #             continue
+
+    #         # Zakładamy że gradient ma pełną szerokość obrazu
+    #         x0, x1 = 0, img_w
+    #         w = x1 - x0
+
+    #         region = img[y0:y1, x0:x1]
+    #         if region.size == 0:
+    #             continue
+
+    #         # Fade maska: center = 1.0, fade do 0.0 na górę i na dół
+    #         fade = np.linspace(1.0, 0.0, height_top)[:, np.newaxis]
+    #         fade_bottom = np.linspace(1.0, 0.0, height_bottom)[:, np.newaxis]
+    #         fade = np.vstack([fade[::-1], fade_bottom])  # od środka do góry + od środka do dołu
+    #         fade = np.tile(fade, (1, w)).reshape(h, w, 1)
+
+    #         # Ekstrakcja parametrów
+    #         temperature = g.get("temperature", 0)
+    #         tint = g.get("tint", 0)
+    #         brightness = g.get("brightness", 0)
+    #         contrast = g.get("contrast", 0)
+
+    #         region = region.copy()
+
+    #         # White balance
+    #         temp_strength = 0.6
+    #         tint_strength = 0.6
+    #         region[:, :, 0] += (-temperature * temp_strength) * fade[:, :, 0]  # Blue
+    #         region[:, :, 2] += (temperature * temp_strength) * fade[:, :, 0]   # Red
+    #         region[:, :, 1] += (tint * tint_strength) * fade[:, :, 0]          # Green
+    #         region[:, :, 0] += (-tint * tint_strength * 0.5) * fade[:, :, 0]   # Blue (magenta)
+    #         region[:, :, 2] += (-tint * tint_strength * 0.5) * fade[:, :, 0]   # Red (magenta)
+
+    #         # Brightness
+    #         region += brightness * fade
+
+    #         # Contrast
+    #         mean = 0.5
+    #         region = (region - mean) * (1 + contrast * fade) + mean
+
+    #         img[y0:y1, x0:x1] = np.clip(region, 0, 1)
+
+    #     return (img * 255).astype(np.uint8)
+
+

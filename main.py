@@ -174,6 +174,11 @@ class ImageEditorApp(ctk.CTk):
             "active": True,
             "start": start,
             "end": end,
+            # ---
+            "center": (cx, cy),
+            "height_top": 100,
+            "height_bottom": 100,
+            # ---
             "angle": angle,
             "handle": handle,
             "effects": {...},
