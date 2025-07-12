@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import math
 
+from info_windows.window_process import InfoWindow
+
 
 class GradientController:
     def __init__(self, app):
@@ -248,12 +250,10 @@ class GradientController:
         gradient["handle"] = self.calculate_rotation_handle(cx, cy, angle)
 
 
-    from info_windows.window_process import InfoWindow
     def delete_gradient(self, event):
 
-        confirm = self.InfoWindow(self, 'Delete ?')
+        confirm = InfoWindow(self.app, 'Delete ?')
         answer = confirm.get_answer()
-        print(' --------------------- answer --------------------- ', answer)
 
         if answer == False:
             return
@@ -267,13 +267,9 @@ class GradientController:
                 x0, x1 = sorted([x0, x1])
                 y0, y1 = sorted([y0, y1])
 
-                print(' --------------------- delete_gradient x, y --------------------- ', x, y, i)
-                print(' --------------------- delete_gradient x0, y0 --------------------- ', x0, y0)
-                print(' --------------------- delete_gradient x1, y1 --------------------- ', x1, y1)
-
                 if x0 <= x <= x1 and y0 <= y <= y1:
-                    del [i]
-                    self.apply_gradients(self.app.small_image.copy(), self.app.gradients)
+                    del self.app.gradients[i]
+                    self.app.refresh_image()
                     break
 
 
@@ -366,6 +362,7 @@ class GradientController:
 
 
     def apply_gradients(self, img, gradients):
+        print(' --------------------- self.app.gradients -3- --------------------- ', gradients)
         img = img.astype(np.float32) / 255.0  # Normalize
         img_h, img_w = img.shape[:2]
 
