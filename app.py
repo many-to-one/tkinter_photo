@@ -38,20 +38,13 @@ from info_windows.window_process import InfoWindow
 from info_windows.init_window import InitWindow
 from zoom.zoom import Zoom
 
+from menu.top_menu import TopMenu
+from menu.left_menu import LeftSideBar
+
 # Theme
 ctk.set_appearance_mode("Dark")
 
 
-class HighMenu(ctk.CTkFrame):
-    def __init__(self, master, width=300, height=570, corner_radius=0):
-        super().__init__(master)
-
-
-class RightSideBar(ctk.CTkFrame):
-    def __init__(self, master, width=30, height=570, corner_radius=0):
-        super().__init__(master)
-
-        # self.right_menu.grid(row=1, column=0, sticky="w")
 
 
 class ImageEditorApp(ctk.CTk):
@@ -84,11 +77,26 @@ class ImageEditorApp(ctk.CTk):
         # self.root.bind('<Control-plus>', self.zoom_in)
         # self.root.bind('<Control-equal>', self.zoom_in)  # Handle Ctrl + = (some keyboards)
 
-        self.height_menu = HighMenu(self, width=300, height=30, corner_radius=0)
-        self.height_menu.grid(row=0, column=0, pady=0, sticky="we")
+        
+        """      
+            Example grid layout:
+            self.grid_rowconfigure(0, weight=1)
+            self.grid_rowconfigure(1, weight=30)
+            → Total weight = 1 + 30 = 31
+            → Row 1 gets 30/31 ≈ 96.8% of the height
+            → Row 0 gets 1/31 ≈ 3.2%
 
-        self.right_menu = RightSideBar(self, width=30, height=570, corner_radius=0)
-        self.right_menu.grid(row=1, column=0, sticky="w")
+        """
+        # ← critical!
+        # Only row 1 is stretchable to get max height of left_menu
+        self.grid_rowconfigure(0, weight=0)  # top_menu
+        self.grid_rowconfigure(1, weight=1)  # left_menu
+
+        self.top_menu = TopMenu(self, height=35)
+        self.top_menu.grid(row=0, column=0, pady=0, sticky="wne")
+
+        self.left_menu = LeftSideBar(self, width=35)
+        self.left_menu.grid(row=1, column=0, sticky="nsw")  # ← stretch vertically + stick left
 
 if __name__ == "__main__":
     app = ImageEditorApp()
