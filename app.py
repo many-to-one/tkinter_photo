@@ -40,6 +40,7 @@ from zoom.zoom import Zoom
 
 from menu.top_menu import TopMenu
 from menu.left_menu import LeftSideBar
+from menu.right_menu import RightSideBar
 
 # Theme
 ctk.set_appearance_mode("Dark")
@@ -97,6 +98,9 @@ class ImageEditorApp(ctk.CTk):
 
         self.left_menu = LeftSideBar(self, width=35)
         self.left_menu.grid(row=1, column=0, sticky="nsw")  # ← stretch vertically + stick left
+
+        self.right_menu = RightSideBar(self, width=300)
+        self.right_menu.grid(row=1, column=0, sticky="nse")
 
 if __name__ == "__main__":
     app = ImageEditorApp()
