@@ -5,6 +5,7 @@ from app_widgets.accordion_section import create_accordion_section #AccordionSec
 class RightSideBar(ctk.CTkFrame):
     def __init__(self, master, width):
         super().__init__(master, width=width)
+        self.app = master
         self.grid_propagate(False)  # Prevent the frame from resizing to its content
 
         controls = ctk.CTkScrollableFrame(self, width=290, fg_color="#212121")
@@ -128,4 +129,4 @@ class RightSideBar(ctk.CTkFrame):
         #     self.update_gradient_changes(slider_tipo, current_slider_value)
         # else:
         #     self.apply_adjustments(slider_tipo, current_slider_value)
-        self.refresh_image()
+        self.app.refresh_image()
