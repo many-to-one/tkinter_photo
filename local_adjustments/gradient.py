@@ -183,12 +183,16 @@ class GradientController:
                 self.rotating_gradient = g
                 g["active"] = True
                 found = True
-                self.app.slider_frame.pack(fill='x', padx=10, pady=10)  # Show
-                self.load_gradient_to_sliders(g)  # <-- Load values
+                self.app.add_gradient()  # Show gradient panel
+                # self.app.slider_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+                # self.app.panel.configure(width=300)
+
+                # ✅ Update sliders with gradient values here:
+                self.load_gradient_to_sliders(gradient=self.rotating_gradient)
                 break
 
         if not found:
-            self.app.slider_frame.pack_forget()
+            self.app.slider_frame.grid_forget()
             self.app.panel.width = 0
 
         print(' --------------------- on_mouse_double_click --------------------- ')

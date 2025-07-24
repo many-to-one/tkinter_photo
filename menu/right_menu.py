@@ -1,4 +1,7 @@
 import customtkinter as ctk
+import tkinter as tk
+
+import numpy as np
 
 from app_widgets.accordion_section import create_accordion_section #AccordionSection
 
@@ -10,6 +13,23 @@ class RightSideBar(ctk.CTkFrame):
 
         controls = ctk.CTkScrollableFrame(self, width=290, fg_color="#212121")
         controls.pack(fill="both", expand=True)
+
+        # Curve
+        self.canvas = tk.Canvas(controls, bg="black", width=256, height=256)
+        self.canvas.pack(padx=20, pady=20)
+        # Control points (x in [0,255], y in [0,255])
+        self.points = [(0, 255), (64, 192), (128, 128), (192, 64), (255, 0)]
+
+        self.canvas.bind("<Button-1>", self.add_point)
+        self.canvas.bind("<B1-Motion>", self.move_point)
+        self.draw_curve()
+
+        self.canvas.bind("<Button-1>", self.add_point)
+        self.canvas.bind("<B1-Motion>", self.move_point)
+
+        reset_curve_btn = ctk.CTkButton(controls, text="Reset Curve", command=self.reset_curve)
+        reset_curve_btn.pack(pady=10)
+
 
         # White balance accordion section
         white_balance_section = create_accordion_section(controls, "White Balance")
@@ -130,3 +150,39 @@ class RightSideBar(ctk.CTkFrame):
         # else:
         #     self.apply_adjustments(slider_tipo, current_slider_value)
         self.app.refresh_image()
+
+    
+    # Curve
+    def generate_lut(self):
+        xs, ys = zip(*sorted(self.points))
+        ys = [255 - y for y in ys]  # Invert to match brightness
+        lut = np.interp(np.arange(256), xs, ys)
+        return np.clip(lut, 0, 255).astype(np.uint8)
+
+    def add_point(self, event):
+        if event.state & 0x0004:  # Ctrl key on Windows/Linux
+            self.points.append((event.x, event.y))
+            self.draw_curve()
+
+    def move_point(self, event):
+        closest = min(self.points, key=lambda p: abs(p[0] - event.x))
+        self.points.remove(closest)
+        self.points.append((event.x, event.y))
+        self.draw_curve()
+
+    def reset_curve(self):
+        self.points = [(0, 255), (64, 192), (128, 128), (192, 64), (255, 0)]
+        self.draw_curve()
+
+    def draw_curve(self):
+        self.canvas.delete("all")
+        self.points = sorted(self.points)
+        for x, y in self.points:
+            self.canvas.create_oval(x - 4, y - 4, x + 4, y + 4, fill="white")
+        for i in range(len(self.points) - 1):
+            self.canvas.create_line(*self.points[i], *self.points[i + 1], fill="cyan", width=2)
+
+        # Only apply curve now (fast update)
+        if self.app.display_image is not None:
+            self.app.apply_curve_only()
+            # threading.Thread(target=self.apply_adjustments).start()
