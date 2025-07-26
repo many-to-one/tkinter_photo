@@ -20,7 +20,7 @@ class LeftSideBar(ctk.CTkFrame):
     def optionmenu_callback(self, choice):
         print("optionmenu dropdown clicked:", choice)
         if choice == "Gr":
-            self.master.toggle_gradient_panel()
+            self.master.open_gradient_panel()
 
         # optionmenu = ctk.CTkOptionMenu(self.master, values=["option 1", "option 2"],
         #                                         command=optionmenu_callback)

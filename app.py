@@ -181,9 +181,9 @@ class ImageEditorApp(ctk.CTk):
         sat_adj = {color: slider.get() for color, slider in self.right_menu.sat_sliders.items()}
         lum_adj = {color: slider.get() for color, slider in self.right_menu.lum_sliders.items()}
 
-        print('----------- hue_adj ------------', hue_adj)
-        print('----------- sat_adj ------------', sat_adj)
-        print('----------- lum_adj ------------', lum_adj)
+        # print('----------- hue_adj ------------', hue_adj)
+        # print('----------- sat_adj ------------', sat_adj)
+        # print('----------- lum_adj ------------', lum_adj)
 
         primary_hue = {
             "Red": self.right_menu.primary_hue_sliders["Red"].get(),
@@ -196,12 +196,12 @@ class ImageEditorApp(ctk.CTk):
             "Blue": self.right_menu.primary_sat_sliders["Blue"].get(),
         }
 
-        print(' ----------- primary_hue ------------ ', primary_hue)
-        print(' ----------- primary_sat ------------ ', primary_sat)
+        # print(' ----------- primary_hue ------------ ', primary_hue)
+        # print(' ----------- primary_sat ------------ ', primary_sat)
 
 
         shadows_tint = self.right_menu.shadows_tint.get()
-        print(' ----------- shadows_tint ------------ ', shadows_tint)
+        # print(' ----------- shadows_tint ------------ ', shadows_tint)
 
 
         img = apply_all_adjustments_c(
@@ -269,9 +269,11 @@ class ImageEditorApp(ctk.CTk):
 
     def gradient_sliders(self):
 
+        if hasattr(self, 'slider_frame') and self.slider_frame.winfo_exists():
+            self.slider_frame.destroy()
+
         self.slider_frame = ctk.CTkFrame(self, width=200)
         self.slider_frame.grid(row=1, column=0, sticky="nsw", pady=(0, 10), padx=(40, 0))
-        # self.slider_frame.pack_forget()  # Hide initially
 
         # Close button inside slider_frame (top-right)
         close_button = ctk.CTkButton(
@@ -281,7 +283,7 @@ class ImageEditorApp(ctk.CTk):
             height=25,
             fg_color="red",
             hover_color="#cc0000",
-            command=self.toggle_gradient_panel
+            command=self.close_gradient_panel
         )
         close_button.place(relx=1.0, rely=0.0, anchor="ne", x=-5, y=5)  # Place in top-right corner
 
@@ -315,6 +317,7 @@ class ImageEditorApp(ctk.CTk):
 
     def add_gradient(self):
 
+        print(' --------------------- len(self.gradients) ------------------', len(self.gradients))
         self.gradients_controller.clear_sliders()
         gradient_index = len(self.gradients)
         start = (0, 0)
@@ -332,10 +335,10 @@ class ImageEditorApp(ctk.CTk):
             # print('Checking existing gradient:', g)
             if g["active"]:
                 active_gradient = 1
-                self.gradients_controller.load_gradient_to_sliders(g)
+                # self.gradients_controller.load_gradient_to_sliders(g)
                 print('Gradient already active, skipping creation')
-                self.gradient_sliders()
-                self.refresh_image()
+                # self.gradient_sliders()
+                # self.refresh_image()
                 break
             # g["active"] = False
         if active_gradient == 0:
@@ -387,7 +390,8 @@ class ImageEditorApp(ctk.CTk):
 
             print(' --------------------- add_gradient ------------------', self.gradients)
 
-    # def update_gradient_changes(self, name, value, gradient_index):
+
+
     def update_gradient_changes(self, name, value):
         print(' --------------------- update_gradient_changes ------------------', name, value)
 
@@ -403,17 +407,30 @@ class ImageEditorApp(ctk.CTk):
         self.refresh_image() 
 
 
-    def toggle_gradient_panel(self):
-        if self.gradient_panel_visible:
-            # Panel już istnieje → usuń go
+
+    def close_gradient_panel(self):
+        print(" **************** Closing gradient panel **************** ", self.gradients)
+        for g in self.gradients:
+            g["active"] = False
+        try:
             self.gradient_panel_visible = False
-            print("Gradient panel hidden")
-            self.slider_frame.grid_remove()  # Hide the slider frame
-        else:
-            # Panel nie istnieje → stwórz
+            if hasattr(self, 'slider_frame') and self.slider_frame.winfo_exists():
+                self.slider_frame.destroy()
+            print("Gradient panel forcefully hidden.")
+        except Exception as e:
+            print("Can't close the panel:", e)
+
+
+    def open_gradient_panel(self):
+        if not self.gradient_panel_visible:
+            # self.slider_frame.grid()
             self.gradient_panel_visible = True
-            self.add_gradient()
-            print("Gradient panel shown")
+            self.add_gradient() 
+            print(" **************** Gradient panel shown **************** ")
+        else:
+            print(" **************** Gradient panel already visible, skipping creation **************** ")
+            self.refresh_image()
+
 
 
 

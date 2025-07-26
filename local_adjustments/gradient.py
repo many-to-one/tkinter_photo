@@ -48,7 +48,18 @@ class GradientController:
             pts = np.array([p1, p2, p3, p4], dtype=np.int32).reshape((-1, 1, 2))
 
             # Draw the polygon
-            cv2.polylines(img, [pts], isClosed=True, color=(0, 255, 0), thickness=2)
+            cv2.polylines(img, [pts], isClosed=True, color=(255, 255, 255), thickness=2)
+
+
+            # def get_contrasting_color(bg_color):
+            #     # Convert BGR to grayscale brightness
+            #     brightness = int(0.299 * bg_color[2] + 0.587 * bg_color[1] + 0.114 * bg_color[0])
+            #     return (255, 255, 255) if brightness < 128 else (0, 0, 0)
+            
+            # line_color = get_contrasting_color(img.mean(axis=(0, 1)))
+            # cv2.polylines(img, [pts], isClosed=True, color=line_color, thickness=2)
+            # or
+            # cv2.polylines(img, [pts], isClosed=True, color=(0, 255, 0), thickness=2)
 
         return img
 
@@ -174,26 +185,21 @@ class GradientController:
     def on_mouse_double_click(self, event):
 
         x, y = event.x * 2, event.y * 2
-
         found = False
 
         for g in self.app.gradients:
             g["active"] = False  # deactivate all by default
             if self.is_inside_gradient(x, y, g):
-                self.rotating_gradient = g
+                print(' --------------------- is_inside_gradient --------------------- ', g)
                 g["active"] = True
                 found = True
-                self.app.add_gradient()  # Show gradient panel
-                # self.app.slider_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
-                # self.app.panel.configure(width=300)
 
                 # ✅ Update sliders with gradient values here:
-                self.load_gradient_to_sliders(gradient=self.rotating_gradient)
+                self.load_gradient_to_sliders(g)
                 break
 
         if not found:
             self.app.slider_frame.grid_forget()
-            self.app.panel.width = 0
 
         print(' --------------------- on_mouse_double_click --------------------- ')
 
@@ -204,7 +210,7 @@ class GradientController:
         x1, y1 = gradient["end"]
 
         x_min, x_max = sorted([x0, x1])
-        y_min, y_max = sorted([y0, y1])
+        y_min, y_max = sorted([y0 - 200, y1 + 200])
 
         print(' ------------- is_inside_gradient x_min, x_max ------------- ', x_min, x_max)
         print(' ------------- is_inside_gradient y_min, y_max ------------- ', y_min, y_max)
@@ -213,6 +219,7 @@ class GradientController:
 
     
     def load_gradient_to_sliders(self, gradient):
+        self.app.gradient_sliders()
         for name in ['brightness', 'contrast', 'temperature', 'tint', 'strength']:
             if name in self.app.sliders and name in gradient:
                 slider, var = self.app.sliders[name]
@@ -277,67 +284,7 @@ class GradientController:
                     break
 
 
-    # def apply_gradients(self, img, gradients):
-    #     img = img.astype(np.float32) / 255.0  # Normalize image
-
-    #     for g in gradients:
-    #         if not g["start"] or not g["end"]:
-    #             continue
-
-    #         x0, y0 = g["start"]
-    #         x1, y1 = g["end"]
-    #         x0, x1 = sorted([int(x0), int(x1)])
-    #         y0, y1 = sorted([int(y0), int(y1)])
-    #         w, h = x1 - x0, y1 - y0
-
-    #         if w <= 0 or h <= 0:
-    #             continue
-
-    #         # Extract adjustments
-    #         temperature = g.get("temperature", 0.0)
-    #         tint = g.get("tint", 0.0)
-    #         brightness = g.get("brightness", 0.0)
-    #         contrast = g.get("contrast", 0.0)
-    #         angle = g.get("angle", 45)  # default angle = 90° (vertical)
-
-    #         # Generate fade mask with rotation
-    #         fade = self.generate_rotated_fade_mask(w, h, angle).reshape(h, w, 1)
-
-    #         # Extract region
-    #         region = img[y0:y1, x0:x1]
-
-    #         # Skip invalid region
-    #         if region.shape[:2] != fade.shape[:2]:
-    #             continue
-
-    #         # --- Apply adjustments with fade ---
-
-    #         # Temperature (cool to warm: blue ↔ red)
-    #         temp_strength = 0.6
-    #         region[:, :, 0] += (-temperature * temp_strength) * fade[:, :, 0]  # Blue
-    #         region[:, :, 2] += (temperature * temp_strength) * fade[:, :, 0]   # Red
-
-    #         # Tint (green ↔ magenta)
-    #         tint_strength = 0.6
-    #         region[:, :, 1] += (tint * tint_strength) * fade[:, :, 0]         # Green
-    #         region[:, :, 0] += (-tint * tint_strength * 0.5) * fade[:, :, 0]  # Blue
-    #         region[:, :, 2] += (-tint * tint_strength * 0.5) * fade[:, :, 0]  # Red
-
-    #         # Brightness
-    #         region += brightness * fade
-
-    #         # Contrast
-    #         mean = 0.5
-    #         region = (region - mean) * (1 + contrast * fade) + mean
-
-    #         # Clip and paste back
-    #         img[y0:y1, x0:x1] = np.clip(region, 0, 1)
-
-    #     return (img * 255).astype(np.uint8)
-
-# ***************************************************************************
-
-
+    
     def generate_rotated_fade_mask(self, width, height, angle):
 
         # fade = np.tile(np.linspace(1.0, 0.0, height)[:, np.newaxis], (1, width))

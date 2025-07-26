@@ -63,10 +63,10 @@ def apply_all_adjustments_c(img: np.ndarray, brightness, contrast, saturation,
     h, w, _ = img.shape
     flat = img.ravel()
 
-    print('----------- hue_arr ------------', hue_arr)
-    print('----------- sat_arr ------------', sat_arr)
-    print('----------- lum_arr ------------', lum_arr)
-    print('----------- hue_arr ------------', brightness)
+    # print('----------- hue_arr ------------', hue_arr)
+    # print('----------- sat_arr ------------', sat_arr)
+    # print('----------- lum_arr ------------', lum_arr)
+    # print('----------- hue_arr ------------', brightness)
 
     h_arr = (ctypes.c_float * 8)(*hue_arr)
     s_arr = (ctypes.c_float * 8)(*sat_arr)
