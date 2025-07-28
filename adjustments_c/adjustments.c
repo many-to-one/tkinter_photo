@@ -136,6 +136,56 @@ void apply_primary_adjustment(float* r, float* g, float* b,
 }
 
 
+float soft_hue_shift(float h, float* hsl_h) {
+    float shifted_hue = h;
+    float sum = 0.0f;
+    float total_weight = 0.0f;
+
+    for (int i = 0; i < 8; ++i) {
+        // Center of each band in hue space (0.0 to 1.0)
+        float center = (i + 0.5f) / 8.0f;
+
+        // Calculate hue distance with wrap-around
+        float dist = fabsf(h - center);
+        if (dist > 0.5f) dist = 1.0f - dist;
+
+        // Apply Gaussian-like falloff (smooth)
+        float weight = expf(-dist * dist * 64.0f);  // smoothness control
+        float delta_h = hsl_h[i] / 8.0f;            // scale shift
+
+        sum += delta_h * weight;
+        total_weight += weight;
+    }
+
+    if (total_weight > 0.0f)
+        shifted_hue = h + sum / total_weight;
+
+    // Wrap hue to [0, 1]
+    if (shifted_hue < 0.0f) shifted_hue += 1.0f;
+    if (shifted_hue > 1.0f) shifted_hue -= 1.0f;
+
+    return shifted_hue;
+}
+
+
+float soft_luminance_shift(float h, float l, float* hsl_l, float sigma) {
+    float result = 0.0f;
+    float total_weight = 0.0f;
+
+    for (int i = 0; i < 8; ++i) {
+        float band_center = (i + 0.5f) / 8.0f;
+        float distance = fabsf(h - band_center);
+        if (distance > 0.5f) distance = 1.0f - distance; // hue wrap-around
+        float w = expf(-0.5f * (distance / sigma) * (distance / sigma)); // Gaussian
+        result += l * hsl_l[i] * w;
+        total_weight += w;
+    }
+
+    return clamp(result / total_weight, 0.0f, 1.0f);
+}
+
+
+
 void apply_all_adjustments(
     uint8_t* img, int width, int height,
     float brightness, float contrast, float saturation,
@@ -205,14 +255,20 @@ void apply_all_adjustments(
         int band = (int)(h * 8.0f);
         band = clamp(band, 0, 7);
 
+        // if (s > 0.1f && l > 0.05f) {
+        //     h += hsl_h[band] / 8.0f;
+        //     if (h > 1.0f) h -= 1.0f;
+        //     if (h < 0.0f) h += 1.0f;
+        // }
         if (s > 0.1f && l > 0.05f) {
-            h += hsl_h[band] / 8.0f;
-            if (h > 1.0f) h -= 1.0f;
-            if (h < 0.0f) h += 1.0f;
+            h = soft_hue_shift(h, hsl_h);
         }
 
+
         s = clamp(s * hsl_s[band], 0.0f, 1.0f);
-        l = clamp(l * hsl_l[band], 0.0f, 1.0f);
+        // l = clamp(l * hsl_l[band], 0.0f, 1.0f);
+        l = soft_luminance_shift(h, l, hsl_l, 0.08f); // 0.08 = softness
+
 
         // ---- Dehaze ----
         if (dehaze > 0.0f) {
@@ -288,3 +344,7 @@ void apply_all_adjustments(
         img[i + 0] = (uint8_t)(b * 255.0f);
     }
 }
+
+
+
+
