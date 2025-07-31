@@ -136,6 +136,31 @@ void apply_primary_adjustment(float* r, float* g, float* b,
 }
 
 
+
+// For each hue band (0..7), apply a smooth contribution to the hue
+// float soft_hue_shift(float h, float* hsl_h, float sigma) {
+//     float new_h = 0.0f;
+//     float total_weight = 0.0f;
+
+//     for (int i = 0; i < 8; ++i) {
+//         float band_center = (i + 0.5f) / 8.0f;  // center of each band
+//         float dist = fabsf(h - band_center);
+//         if (dist > 0.5f) dist = 1.0f - dist; // wrap-around hue
+
+//         float weight = expf(-0.5f * (dist / sigma) * (dist / sigma));
+//         float shifted = h + hsl_h[i];  // shift hue by hsl_h[i]
+//         if (shifted < 0.0f) shifted += 1.0f;
+//         if (shifted > 1.0f) shifted -= 1.0f;
+
+//         new_h += shifted * weight;
+//         total_weight += weight;
+//     }
+
+//     return fmodf(new_h / total_weight, 1.0f);
+// }
+
+
+
 float soft_hue_shift(float h, float* hsl_h) {
     float shifted_hue = h;
     float sum = 0.0f;
@@ -150,7 +175,7 @@ float soft_hue_shift(float h, float* hsl_h) {
         if (dist > 0.5f) dist = 1.0f - dist;
 
         // Apply Gaussian-like falloff (smooth)
-        float weight = expf(-dist * dist * 64.0f);  // smoothness control
+        float weight = expf(-dist * dist * 4.0f);  // smoothness control
         float delta_h = hsl_h[i] / 8.0f;            // scale shift
 
         sum += delta_h * weight;
@@ -183,6 +208,8 @@ float soft_luminance_shift(float h, float l, float* hsl_l, float sigma) {
 
     return clamp(result / total_weight, 0.0f, 1.0f);
 }
+
+
 
 
 
@@ -262,12 +289,13 @@ void apply_all_adjustments(
         // }
         if (s > 0.1f && l > 0.05f) {
             h = soft_hue_shift(h, hsl_h);
+            // h = soft_hue_shift(h, hsl_h, 0.08f); // <- soften transitions
         }
 
 
         s = clamp(s * hsl_s[band], 0.0f, 1.0f);
         // l = clamp(l * hsl_l[band], 0.0f, 1.0f);
-        l = soft_luminance_shift(h, l, hsl_l, 0.08f); // 0.08 = softness
+        l = soft_luminance_shift(h, l, hsl_l, 0.15f); // 0.08 = softness
 
 
         // ---- Dehaze ----
